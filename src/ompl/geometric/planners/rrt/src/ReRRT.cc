@@ -148,9 +148,8 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
         }
 
         bool to_create_motion = true;
-        if (!si_->checkMotion(nmotion->state, dstate)) {
-	    std::pair<base::State*, double> lastValid;
-	    si_->checkMotion(nmotion->state, dstate, lastValid);
+	std::pair<base::State*, double> lastValid;
+        if (!si_->checkMotion(nmotion->state, dstate, lastValid)) {
             if (lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
 		si_->copyState(dstate, lastValid.first);
 		si_->freeState(lastValid.first);
