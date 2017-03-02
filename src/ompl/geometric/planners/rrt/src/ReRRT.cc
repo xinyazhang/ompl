@@ -125,6 +125,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     Motion *rmotion   = new Motion(si_);
     base::State *rstate = rmotion->state;
     base::State *xstate = si_->allocState();
+    base::State *restate = si_->allocState();
 
     while (ptc == false)
     {
@@ -148,11 +149,11 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
         }
 
         bool to_create_motion = true;
-	std::pair<base::State*, double> lastValid;
+	std::pair<base::State*, double> lastValid(restate, 0.0);
         if (!si_->checkMotion(nmotion->state, dstate, lastValid)) {
+	    // OMPL_INFORM("%s: Retraction performed, state: %p, tau: %f", getName().c_str(), lastValid.first, lastValid.second);
             if (lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
 		si_->copyState(dstate, lastValid.first);
-		si_->freeState(lastValid.first);
 	    } else
 		to_create_motion = false;
 	}
@@ -208,6 +209,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     }
 
     si_->freeState(xstate);
+    si_->freeState(restate);
     if (rmotion->state)
         si_->freeState(rmotion->state);
     delete rmotion;
