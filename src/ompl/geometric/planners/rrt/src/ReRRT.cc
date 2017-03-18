@@ -40,6 +40,7 @@
 #include "ompl/base/goals/GoalSampleableRegion.h"
 #include "ompl/tools/config/SelfConfig.h"
 #include <limits>
+#include <ostream>
 
 ompl::geometric::ReRRT::ReRRT(const base::SpaceInformationPtr &si) : base::Planner(si, "Re-RRT")
 {
@@ -95,6 +96,21 @@ void ompl::geometric::ReRRT::freeMemory()
     }
 }
 
+namespace {
+
+std::ostream&
+    print_state(std::ostream& fout,
+	const ompl::base::State* state,
+	const ompl::base::SpaceInformationPtr& si)
+{
+        std::vector<double> reals;
+        si->getStateSpace()->copyToReals(reals, state);
+        std::copy(reals.begin(), reals.end(), std::ostream_iterator<double>(fout, " "));
+        return fout;
+}
+
+}
+
 ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTerminationCondition &ptc)
 {
     checkValidity();
@@ -105,8 +121,11 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     {
         Motion *motion = new Motion(si_);
         si_->copyState(motion->state, st);
+	std::cout << getName() << ": Initialize by adding state ";
+	print_state(std::cout, st, si_) << std::endl;
         nn_->add(motion);
     }
+    // OMPL_INFORM("%s: Actual class of Goal: %s", getName().c_str(), typeid(*goal).name());
 
     if (nn_->size() == 0)
     {
@@ -118,6 +137,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
         sampler_ = si_->allocStateSampler();
 
     OMPL_INFORM("%s: Starting planning with %u states already in datastructure", getName().c_str(), nn_->size());
+    OMPL_INFORM("%s: Max Distance %f", getName().c_str(), maxDistance_);
 
     Motion *solution  = nullptr;
     Motion *approxsol = nullptr;
@@ -126,15 +146,26 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     base::State *rstate = rmotion->state;
     base::State *xstate = si_->allocState();
     base::State *restate = si_->allocState();
+    size_t nsample_created = 0;
+    size_t nsample_injected = 0;
 
     while (ptc == false)
     {
-
-        /* sample random state (with goal biasing) */
-        if (goal_s && rng_.uniform01() < goalBias_ && goal_s->canSample())
-            goal_s->sampleGoal(rstate);
-        else
-            sampler_->sampleUniform(rstate);
+	bool injecting = (nsample_created >= sample_injection_ && nsample_injected < samples_to_inject_.size());
+	if (injecting) {
+	    si_->getStateSpace()->copyFromReals(rstate, samples_to_inject_[nsample_injected]);
+#if 0
+	    std::cout << getName() << ": Injecting state ";
+	    print_state(std::cout, rstate, si_) << std::endl;
+#endif
+	    nsample_injected++;
+	} else {
+	    /* sample random state (with goal biasing) */
+	    if (goal_s && rng_.uniform01() < goalBias_ && goal_s->canSample())
+		goal_s->sampleGoal(rstate);
+	    else
+		sampler_->sampleUniform(rstate);
+	}
 
         /* find closest state in the tree */
         Motion *nmotion = nn_->nearest(rmotion);
@@ -142,7 +173,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 
         /* find state to add */
         double d = si_->distance(nmotion->state, rstate);
-        if (d > maxDistance_)
+        if (d > maxDistance_ && !injecting)
         {
             si_->getStateSpace()->interpolate(nmotion->state, rstate, maxDistance_ / d, xstate);
             dstate = xstate;
@@ -151,17 +182,36 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
         bool to_create_motion = true;
 	std::pair<base::State*, double> lastValid(restate, 0.0);
         if (!si_->checkMotion(nmotion->state, dstate, lastValid)) {
-	    // OMPL_INFORM("%s: Retraction performed, state: %p, tau: %f", getName().c_str(), lastValid.first, lastValid.second);
             if (lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
 		si_->copyState(dstate, lastValid.first);
 	    } else
 		to_create_motion = false;
+	    if (injecting) {
+#if 0
+		OMPL_INFORM("%s: Retraction performed, state: %p, tau: %f", getName().c_str(), lastValid.first, lastValid.second);
+		print_state(std::cout, dstate, si_);
+		std::cout << std::endl;
+#endif
+	    }
 	}
+#if 0
+        if (injecting) {
+	    print_state(std::cout, dstate, si_);
+	    std::cout << std::endl;
+	}
+#endif
         if (to_create_motion) {
             /* create a motion */
 	    Motion *motion = new Motion(si_);
 	    si_->copyState(motion->state, dstate);
 	    motion->parent = nmotion;
+#if 0
+	    if (injecting) {
+		std::cout << "Re-RRT: Creating Edge From " << std::endl << "\t";
+		print_state(std::cout, nmotion->state, si_) << std::endl << "\tTo\n\t";
+		print_state(std::cout, dstate, si_) << std::endl;
+	    }
+#endif
 
 	    nn_->add(motion);
 	    double dist = 0.0;
@@ -177,6 +227,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		approxdif = dist;
 		approxsol = motion;
 	    }
+	    nsample_created++;
 	}
     }
 
@@ -217,6 +268,12 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     OMPL_INFORM("%s: Created %u states", getName().c_str(), nn_->size());
 
     return base::PlannerStatus(solved, approximate);
+}
+
+void ompl::geometric::ReRRT::setStateInjection(size_t start_from, std::vector<std::vector<double>> samples)
+{
+    sample_injection_ = start_from;
+    samples_to_inject_ = std::move(samples);
 }
 
 void ompl::geometric::ReRRT::getPlannerData(base::PlannerData &data) const

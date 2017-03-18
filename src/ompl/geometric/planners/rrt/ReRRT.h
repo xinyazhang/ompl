@@ -121,6 +121,8 @@ namespace ompl
 
             virtual void setup();
 
+	    void setStateInjection(size_t start_from, std::vector<std::vector<double>> samples);
+
         protected:
 
 
@@ -179,6 +181,9 @@ namespace ompl
 
             /** \brief The most recent goal motion.  Used for PlannerData computation */
             Motion                                         *lastGoalMotion_;
+
+	    size_t sample_injection_;
+	    std::vector<std::vector<double>> samples_to_inject_;
         };
 
     }
