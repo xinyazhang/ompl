@@ -50,6 +50,7 @@ ompl::geometric::ReRRT::ReRRT(const base::SpaceInformationPtr &si) : base::Plann
     goalBias_ = 0.05;
     maxDistance_ = 0.0;
     lastGoalMotion_ = nullptr;
+    knearest_ = 1;
 
     Planner::declareParam<double>("range", this, &ReRRT::setRange, &ReRRT::getRange, "0.:1.:10000.");
     Planner::declareParam<double>("goal_bias", this, &ReRRT::setGoalBias, &ReRRT::getGoalBias, "0.:.05:1.");
@@ -148,8 +149,9 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     base::State *restate = si_->allocState();
     size_t nsample_created = 0;
     size_t nsample_injected = 0;
+    bool sat = false;
 
-    while (ptc == false)
+    while (ptc == false && !sat)
     {
 	bool injecting = (nsample_created >= sample_injection_ && nsample_injected < samples_to_inject_.size());
 	if (injecting) {
@@ -167,67 +169,80 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		sampler_->sampleUniform(rstate);
 	}
 
-        /* find closest state in the tree */
-        Motion *nmotion = nn_->nearest(rmotion);
-        base::State *dstate = rstate;
-
-        /* find state to add */
-        double d = si_->distance(nmotion->state, rstate);
-        if (d > maxDistance_ && !injecting)
-        {
-            si_->getStateSpace()->interpolate(nmotion->state, rstate, maxDistance_ / d, xstate);
-            dstate = xstate;
-        }
-
-        bool to_create_motion = true;
-	std::pair<base::State*, double> lastValid(restate, 0.0);
-        if (!si_->checkMotion(nmotion->state, dstate, lastValid)) {
-            if (lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
-		si_->copyState(dstate, lastValid.first);
-	    } else
-		to_create_motion = false;
-	    if (injecting) {
+	std::vector<Motion*> nmotions;
+	if (knearest_ == 1) {
+	    nmotions.emplace_back(nn_->nearest(rmotion));
+	} else {
+	    nn_->nearestK(rmotion, knearest_, nmotions);
+	}
 #if 0
-		OMPL_INFORM("%s: Retraction performed, state: %p, tau: %f", getName().c_str(), lastValid.first, lastValid.second);
+	OMPL_INFORM("%s: Find %d neighbors", getName().c_str(), nmotions.size());
+#endif
+        /* find closest state in the tree */
+	for (auto nmotion: nmotions) {
+	    base::State *dstate = rstate;
+
+	    /* find state to add */
+	    double d = si_->distance(nmotion->state, rstate);
+	    if (d > maxDistance_ && !injecting)
+	    {
+		si_->getStateSpace()->interpolate(nmotion->state, rstate, maxDistance_ / d, xstate);
+		dstate = xstate;
+	    }
+
+	    bool to_create_motion = true;
+	    std::pair<base::State*, double> lastValid(restate, 0.0);
+	    bool directly_connected = si_->checkMotion(nmotion->state, dstate, lastValid);
+	    if (!directly_connected) {
+		if (lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
+		    si_->copyState(dstate, lastValid.first);
+		} else
+		    to_create_motion = false;
+		if (injecting) {
+#if 0
+		    OMPL_INFORM("%s: Retraction performed, state: %p, tau: %f", getName().c_str(), lastValid.first, lastValid.second);
+		    print_state(std::cout, dstate, si_);
+		    std::cout << std::endl;
+#endif
+		}
+	    }
+#if 0
+	    if (injecting) {
 		print_state(std::cout, dstate, si_);
 		std::cout << std::endl;
-#endif
 	    }
-	}
-#if 0
-        if (injecting) {
-	    print_state(std::cout, dstate, si_);
-	    std::cout << std::endl;
-	}
 #endif
-        if (to_create_motion) {
-            /* create a motion */
-	    Motion *motion = new Motion(si_);
-	    si_->copyState(motion->state, dstate);
-	    motion->parent = nmotion;
+	    if (to_create_motion) {
+		/* create a motion */
+		Motion *motion = new Motion(si_);
+		si_->copyState(motion->state, dstate);
+		motion->parent = nmotion;
 #if 0
-	    if (injecting) {
-		std::cout << "Re-RRT: Creating Edge From " << std::endl << "\t";
-		print_state(std::cout, nmotion->state, si_) << std::endl << "\tTo\n\t";
-		print_state(std::cout, dstate, si_) << std::endl;
-	    }
+		if (injecting) {
+		    std::cout << "Re-RRT: Creating Edge From " << std::endl << "\t";
+		    print_state(std::cout, nmotion->state, si_) << std::endl << "\tTo\n\t";
+		    print_state(std::cout, dstate, si_) << std::endl;
+		}
 #endif
 
-	    nn_->add(motion);
-	    double dist = 0.0;
-	    bool sat = goal->isSatisfied(motion->state, &dist);
-	    if (sat)
-	    {
-		approxdif = dist;
-		solution = motion;
+		nn_->add(motion);
+		double dist = 0.0;
+		sat = goal->isSatisfied(motion->state, &dist);
+		if (sat)
+		{
+		    approxdif = dist;
+		    solution = motion;
+		    break;
+		}
+		if (dist < approxdif)
+		{
+		    approxdif = dist;
+		    approxsol = motion;
+		}
+		nsample_created++;
+	    }
+	    if (directly_connected)
 		break;
-	    }
-	    if (dist < approxdif)
-	    {
-		approxdif = dist;
-		approxsol = motion;
-	    }
-	    nsample_created++;
 	}
     }
 
@@ -261,6 +276,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 
     si_->freeState(xstate);
     si_->freeState(restate);
+
     if (rmotion->state)
         si_->freeState(rmotion->state);
     delete rmotion;

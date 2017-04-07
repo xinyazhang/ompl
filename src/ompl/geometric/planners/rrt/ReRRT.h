@@ -122,6 +122,7 @@ namespace ompl
             virtual void setup();
 
 	    void setStateInjection(size_t start_from, std::vector<std::vector<double>> samples);
+	    void setKNearest(int K) { knearest_ = K; }
 
         protected:
 
@@ -184,6 +185,7 @@ namespace ompl
 
 	    size_t sample_injection_;
 	    std::vector<std::vector<double>> samples_to_inject_;
+	    int knearest_;
         };
 
     }
