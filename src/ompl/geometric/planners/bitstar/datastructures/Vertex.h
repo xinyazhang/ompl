@@ -79,6 +79,10 @@ namespace ompl
         class BITstar::Vertex
         {
         public:
+            typedef std::shared_ptr<Vertex> VertexPtr;
+            typedef std::vector<VertexPtr> VertexPtrVector;
+            typedef std::vector<VertexConstPtr> VertexConstPtrVector;
+
             /** \brief Constructor */
             Vertex(ompl::base::SpaceInformationPtr si, ompl::base::OptimizationObjectivePtr opt, bool root = false);
 
