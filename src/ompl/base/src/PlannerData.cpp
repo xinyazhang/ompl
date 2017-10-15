@@ -271,6 +271,7 @@ namespace
         s = *get(vertex_type_t(), g)[v]->getState();
         std::vector<double> coords(s.reals());
         std::ostringstream sstream;
+        sstream.precision(17);
         if (!coords.empty())
         {
             sstream << coords[0];
@@ -291,10 +292,13 @@ void ompl::base::PlannerData::printGraphML(std::ostream &out) const
     // \todo Can we use make_function_property_map() here and have it
     // infer the property template arguments?
     using Edge = ompl::base::PlannerData::Graph::Edge;
-    boost::function_property_map<std::function<double(Edge)>, Edge> weightmap([this](Edge e)
+    boost::function_property_map<std::function<std::string(Edge)>, Edge> weightmap([this](Edge e)
                                                                               {
-                                                                                  return get(boost::edge_weight_t(),
+                                                                                  std::ostringstream sstream;
+                                                                                  sstream.precision(17);
+                                                                                  sstream << get(boost::edge_weight_t(),
                                                                                              *graph_)[e].value();
+                                                                                  return sstream.str();
                                                                               });
     ompl::base::ScopedState<> s(si_);
     using Vertex = ompl::base::PlannerData::Graph::Vertex;
@@ -309,6 +313,7 @@ void ompl::base::PlannerData::printGraphML(std::ostream &out) const
     dp.property("weight", weightmap);
     dp.property("coords", coordsmap);
 
+    out.precision(17);
     boost::write_graphml(out, *graph_, dp);
 }
 
