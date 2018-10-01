@@ -92,19 +92,26 @@ namespace ompl
             template <template <typename T> class NN>
             void setNearestNeighbors()
             {
-                if ((tStart_ && tStart_->size() != 0) || (tGoal_ && tGoal_->size() != 0))
+                if ((tStart_ && tStart_->nn->size() != 0) || (tGoal_ && tGoal_->nn->size() != 0))
                     OMPL_WARN("Calling setNearestNeighbors will clear all states.");
                 clear();
+#if 0
                 tStart_ = std::make_shared<NN<Motion *>>();
                 tGoal_ = std::make_shared<NN<Motion *>>();
+#endif
+                nn_factory_ = []() {
+	                return std::make_shared<NN<Motion *>>();
+		};
                 setup();
             }
 
             void setup() override;
 
             /** \brief add a set of samples as the roots of the trees.
- 	         Each *COLUMN* is a sample */
-            void plantSamples(const Eigen::MatrixXd& samples);
+ 	        Each *COLUMN* is a sample.
+		
+		This should be called BEFORE setup(). **/
+            void setSamples(const Eigen::MatrixXd& samples);
         protected:
             /** \brief Representation of a motion */
             class Motion
@@ -192,6 +199,9 @@ namespace ompl
 
             /** \brief opaque pointer. Hence we can use Eigen without pulling extra dependencies in the RRTForest.h **/
 	    std::unique_ptr<Private> d_;
+
+	    std::function<std::shared_ptr<NearestNeighbors<Motion *>>()> nn_factory_;
+	    Eigen::MatrixXd additional_samples_;
         };
     }
 }
