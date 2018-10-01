@@ -40,16 +40,21 @@
 
 #include <queue>
 
-struct ompl::geometric::RRTForest::Private {
+namespace ompl {
+namespace geometric {
+
+struct RRTForest::Private {
+    using SpaceInformationPtr = base::SpaceInformationPtr;
+
     enum {
         START_TREE = 0,
         GOAL_TREE = 1,
         TOTAL_INITIAL_TREE
     };
-    const SpaceInformation *si_;
+    SpaceInformationPtr si_;
 
     Private() = delete;
-    Private(const SpaceInformation *si)
+    Private(const SpaceInformationPtr& si)
     {
         si_ = si;
     }
@@ -67,7 +72,7 @@ struct ompl::geometric::RRTForest::Private {
         TreeData tree1, tree2;
         Motion *motion1, *motion2;
 
-        InterTreeConnection(TreeData t1, TreeData t2, Motion* *m1, Motion *m2)
+        InterTreeConnection(TreeData t1, TreeData t2, Motion *m1, Motion *m2)
             : tree1(t1), tree2(t2), motion1(m1), motion2(m2)
         {
         }
@@ -85,6 +90,7 @@ struct ompl::geometric::RRTForest::Private {
                 forest_ consists of roots.cols() + 2 TreeData objects
                 forest_[0] and [1] are reserved for initial tree and goal tree respectively. **/
     void initForest(const Eigen::MatrixXd& roots,
+                    RRTForest* rrt_forest,
                     std::function<double(Motion*, Motion*)> distance_function);
 
     void unionTrees(const InterTreeConnection&);
@@ -126,23 +132,23 @@ struct ompl::geometric::RRTForest::Private {
                     Motion *node_to);
 };
 
-void ompl::geometric::RRTForest::Private::initForest(const Eigen::MatrixXd& roots,
-                             RRTForest *rrt_forest;
+void RRTForest::Private::initForest(const Eigen::MatrixXd& roots,
+                             RRTForest *rrt_forest,
                              std::function<double(Motion*, Motion*)> distance_function)
 {
     // Note: roots are col-major and each column stores one root
     size_t N = roots.cols();
     size_t W = roots.rows(); // W: Width of the state vector
-    treeAdj_.setZero(N, N);
-    treeDisjointSetId_.resize(N);
+    treeAdj_.setZero(N + TOTAL_INITIAL_TREE, N + TOTAL_INITIAL_TREE);
+    treeDisjointSetId_.resize(N + TOTAL_INITIAL_TREE);
 
     forest_.clear();
-    forest_.reserve(N + 2);
-    for (size_t i = 0; i < N + 2; i++) {
+    forest_.reserve(N + TOTAL_INITIAL_TREE);
+    for (size_t i = 0; i < N + TOTAL_INITIAL_TREE; i++) {
         treeDisjointSetId_(i) = i;
         auto tree = std::make_shared<Tree>(int(i));
-        tree->nn->reset(tools::SelfConfig::getDefaultNearestNeighbors<Motion *>(rrt_forest));
-        tree->nn->setDistanceFunction(distance_function)
+        tree->nn.reset(tools::SelfConfig::getDefaultNearestNeighbors<Motion *>(rrt_forest));
+        tree->nn->setDistanceFunction(distance_function);
         forest_.emplace_back(std::move(tree));
     }
 
@@ -151,8 +157,8 @@ void ompl::geometric::RRTForest::Private::initForest(const Eigen::MatrixXd& root
     for (size_t i = 0; i < N; i++) {
         for (size_t j = 0; j < W; j++)
             sample[j] = roots(j, i);
-        auto *motion = new Motion(si);
-        si->getStateSpace()->copyFromReals(motion->state, sample);
+        auto *motion = new Motion(si_);
+        si_->getStateSpace()->copyFromReals(motion->state, sample);
         motion->root = motion->state;
 
         auto& tree = forest_[i+TOTAL_INITIAL_TREE]; // Set forest_ from 2
@@ -164,7 +170,7 @@ void ompl::geometric::RRTForest::Private::initForest(const Eigen::MatrixXd& root
     treeConnections_.clear();
 }
 
-void ompl::geometric::RRTForest::Private::unionTrees(const InterTreeConnection& itc)
+void RRTForest::Private::unionTrees(const InterTreeConnection& itc)
 {
     auto root1 = findTreeSetId(itc.tree1);
     auto root2 = findTreeSetId(itc.tree2);
@@ -178,16 +184,16 @@ void ompl::geometric::RRTForest::Private::unionTrees(const InterTreeConnection& 
     treeAdj_(root2, root1) = -itc_id;
 }
 
-int ompl::geometric::RRTForest::Private::findTreeSetId(TreeData tree)
+int RRTForest::Private::findTreeSetId(TreeData tree)
 {
     if (tree->id != treeDisjointSetId_(tree->id)) {
         int parent_id = treeDisjointSetId_(tree->id);
-        treeDisjointSetId_(tree->id) = findTreeSetId(forest[parent_id]);
+        treeDisjointSetId_(tree->id) = findTreeSetId(forest_[parent_id]);
     }
     return treeDisjointSetId_(tree->id);
 }
 
-void ompl::geometric::RRTForest::Private::freeForest()
+void RRTForest::Private::freeForest()
 {
     std::vector<Motion *> motions;
     for (auto &tree : forest_) {
@@ -200,15 +206,15 @@ void ompl::geometric::RRTForest::Private::freeForest()
     }
 }
 
-void ompl::geometric::RRTForest::Private::clearForest()
+void RRTForest::Private::clearForest()
 {
     for (auto &tree : forest_)
         tree->nn->clear();
 }
 
 
-std::shared_ptr<ompl::geometric::PathGeometric>
-ompl::geometric::RRTForest::Private::getSolutionPath()
+std::shared_ptr<PathGeometric>
+RRTForest::Private::getSolutionPath()
 {
     // Path of Trees
     Eigen::VectorXi distance_from_start = Eigen::VectorXi::Constant(treeDisjointSetId_.size(), -1);
@@ -249,12 +255,9 @@ ompl::geometric::RRTForest::Private::getSolutionPath()
         addToPath(path, itc_now, itc_next);
     }
     addToPath(path, parent_itc(path_tree_level[GOAL_TREE]), forest_[GOAL_TREE]);
-    
+
     return path;
 }
-
-namespace ompl {
-namespace geometric {
 
 void
 RRTForest::Private::addToPath(std::shared_ptr<PathGeometric> path,
@@ -273,7 +276,7 @@ RRTForest::Private::addToPath(std::shared_ptr<PathGeometric> path,
     }
     while (from->parent != nullptr)
         from = from->parent;
-    addPathLCA(path, tree, from, to);
+    addPathLCA(path, from, to);
 }
 
 void
@@ -292,7 +295,7 @@ RRTForest::Private::addToPath(std::shared_ptr<PathGeometric> path,
         sc1 = treeConnections_[index].tree1;
         from = treeConnections_[index].motion1;
     }
-    
+
     if (itc_next > 0) {
         int index = itc_next - 1;
         sc2 = treeConnections_[index].tree1;
@@ -302,9 +305,9 @@ RRTForest::Private::addToPath(std::shared_ptr<PathGeometric> path,
         sc2 = treeConnections_[index].tree2;
         to = treeConnections_[index].motion2;
     }
-    
+
     assert(sc1 == sc2);
-    
+
     addPathLCA(path, from, to);
 }
 
@@ -325,7 +328,7 @@ RRTForest::Private::addToPath(std::shared_ptr<PathGeometric> path,
     }
     while (to->parent != nullptr)
         to = to->parent;
-    addPathLCA(path, tree, from, to);
+    addPathLCA(path, from, to);
 }
 
 void
@@ -357,10 +360,7 @@ RRTForest::Private::addPathLCA(std::shared_ptr<PathGeometric> path,
     }
 }
 
-}
-}
-
-ompl::geometric::RRTForest::RRTForest(const base::SpaceInformationPtr &si) : base::Planner(si, "RRTForest")
+RRTForest::RRTForest(const base::SpaceInformationPtr &si) : base::Planner(si, "RRTForest")
 {
     specs_.recognizedGoal = base::GOAL_SAMPLEABLE_REGION;
     specs_.directed = true;
@@ -369,12 +369,12 @@ ompl::geometric::RRTForest::RRTForest(const base::SpaceInformationPtr &si) : bas
     connectionPoint_ = std::make_pair<base::State *, base::State *>(nullptr, nullptr);
 }
 
-ompl::geometric::RRTForest::~RRTForest()
+RRTForest::~RRTForest()
 {
     freeMemory();
 }
 
-void ompl::geometric::RRTForest::setup()
+void RRTForest::setup()
 {
     Planner::setup();
     tools::SelfConfig sc(si_, getName());
@@ -394,20 +394,21 @@ void ompl::geometric::RRTForest::setup()
                                     return distanceFunction(a, b);
                                 });
 #endif
-}
-
-void ompl::geometric::RRTForest::plantSamples(const Eigen::MatrixXd& samples)
-{
     auto distance_function = [this](const Motion *a, const Motion *b)
                                  {
                                      return distanceFunction(a, b);
-                                 }
-    d_->initForest(samples, distance_function);
+                                 };
+    d_->initForest(additional_samples_, this, distance_function);
     tStart_ = d_->forest_[Private::START_TREE];
     tGoal_ = d_->forest_[Private::GOAL_TREE];
 }
 
-void ompl::geometric::RRTForest::freeMemory()
+void RRTForest::setSamples(const Eigen::MatrixXd& samples)
+{
+    additional_samples_ = samples;
+}
+
+void RRTForest::freeMemory()
 {
     d_->freeForest();
 #if 0
@@ -437,7 +438,7 @@ void ompl::geometric::RRTForest::freeMemory()
 #endif
 }
 
-void ompl::geometric::RRTForest::clear()
+void RRTForest::clear()
 {
     Planner::clear();
     sampler_.reset();
@@ -455,9 +456,9 @@ void ompl::geometric::RRTForest::clear()
 //
 // Note: tgi.xmotion is the newly created motion added to the tree. Hence it
 // is output, rather than the input as indicated by its position.
-ompl::geometric::RRTForest::GrowState ompl::geometric::RRTForest::growTree(TreeData &tree_package,
-                                                                           TreeGrowingInfo &tgi,
-                                                                           Motion *rmotion)
+RRTForest::GrowState RRTForest::growTree(TreeData &tree_package,
+                                         TreeGrowingInfo &tgi,
+                                         Motion *rmotion)
 {
     auto& tree = tree_package->nn;
     /* find closest state in the tree */
@@ -502,7 +503,7 @@ ompl::geometric::RRTForest::GrowState ompl::geometric::RRTForest::growTree(TreeD
 }
 
 ompl::base::PlannerStatus
-ompl::geometric::RRTForest::solve(const base::PlannerTerminationCondition &ptc)
+RRTForest::solve(const base::PlannerTerminationCondition &ptc)
 {
     checkValidity();
     auto *goal = dynamic_cast<base::GoalSampleableRegion *>(pdef_->getGoal().get());
@@ -518,10 +519,10 @@ ompl::geometric::RRTForest::solve(const base::PlannerTerminationCondition &ptc)
         auto *motion = new Motion(si_);
         si_->copyState(motion->state, st);
         motion->root = motion->state;
-        tStart_->add(motion);
+        tStart_->nn->add(motion);
     }
 
-    if (tStart_->size() == 0)
+    if (tStart_->nn->size() == 0)
     {
         OMPL_ERROR("%s: Motion planning start tree could not be initialized!", getName().c_str());
         return base::PlannerStatus::INVALID_START;
@@ -537,7 +538,7 @@ ompl::geometric::RRTForest::solve(const base::PlannerTerminationCondition &ptc)
         sampler_ = si_->allocStateSampler();
 
     OMPL_INFORM("%s: Starting planning with %d states already in datastructure", getName().c_str(),
-                (int)(tStart_->size() + tGoal_->size()));
+                (int)(tStart_->nn->size() + tGoal_->nn->size()));
 
     std::vector<TreeGrowingInfo> tgis(d_->forest_.size());
     for (auto& tgi : tgis)
@@ -559,18 +560,18 @@ ompl::geometric::RRTForest::solve(const base::PlannerTerminationCondition &ptc)
         TreeData &otherTree = startTree ? tStart_ : tGoal_;
 #endif
 
-        if (tGoal_->size() == 0 || pis_.getSampledGoalsCount() < tGoal_->size() / 2)
+        if (tGoal_->nn->size() == 0 || pis_.getSampledGoalsCount() < tGoal_->nn->size() / 2)
         {
-                const base::State *st = tGoal_->size() == 0 ? pis_.nextGoal(ptc) : pis_.nextGoal();
+                const base::State *st = tGoal_->nn->size() == 0 ? pis_.nextGoal(ptc) : pis_.nextGoal();
                 if (st != nullptr)
                 {
                         auto *motion = new Motion(si_);
                         si_->copyState(motion->state, st);
                         motion->root = motion->state;
-                        tGoal_->add(motion);
+                        tGoal_->nn->add(motion);
                 }
 
-                if (tGoal_->size() == 0)
+                if (tGoal_->nn->size() == 0)
                 {
                         OMPL_ERROR("%s: Unable to sample any valid states for goal tree", getName().c_str());
                         break;
@@ -612,7 +613,9 @@ ompl::geometric::RRTForest::solve(const base::PlannerTerminationCondition &ptc)
                     gsc = growTree(otherTree, temp_tgi, rmotion);
                 if (gsc != REACHED)
                     continue;
-                d_->unionTrees({from, to, temp_tgi.xmotion, addedMotion});
+                Private::InterTreeConnection itc(d_->forest_[from], d_->forest_[to],
+                                                 temp_tgi.xmotion, addedMotion);
+                d_->unionTrees(itc);
                 merged = true;
             }
         }
@@ -686,18 +689,19 @@ ompl::geometric::RRTForest::solve(const base::PlannerTerminationCondition &ptc)
         }
     }
 
-    si_->freeState(tgi.xstate);
+    for (auto& tgi : tgis)
+        si_->freeState(tgi.xstate);
     si_->freeState(rstate);
     delete rmotion;
 
     OMPL_INFORM("%s: Created %u states (%u start + %u goal)",
-                getName().c_str(), tStart_->size() + tGoal_->size(),
-                tStart_->size(), tGoal_->size());
+                getName().c_str(), tStart_->nn->size() + tGoal_->nn->size(),
+                tStart_->nn->size(), tGoal_->nn->size());
 
     return solved ? base::PlannerStatus::EXACT_SOLUTION : base::PlannerStatus::TIMEOUT;
 }
 
-void ompl::geometric::RRTForest::getPlannerData(base::PlannerData &data) const
+void RRTForest::getPlannerData(base::PlannerData &data) const
 {
     Planner::getPlannerData(data);
 
@@ -744,10 +748,13 @@ void ompl::geometric::RRTForest::getPlannerData(base::PlannerData &data) const
             data.addEdge(base::PlannerDataVertex(motion->state, 2), base::PlannerDataVertex(motion->parent->state, 2));
         }
     }
-    
+
     // Add the edge connecting the two trees
     data.addEdge(data.vertexIndex(connectionPoint_.first), data.vertexIndex(connectionPoint_.second));
 #endif
+}
+
+}
 }
 
 // vim: tabstop=4:shiftwidth=4:softtabstop=4:expandtab
