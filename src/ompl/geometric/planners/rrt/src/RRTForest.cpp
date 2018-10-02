@@ -75,6 +75,10 @@ struct RRTForest::Private {
         InterTreeConnection(TreeData t1, TreeData t2, Motion *m1, Motion *m2)
             : tree1(t1), tree2(t2), motion1(m1), motion2(m2)
         {
+            assert(!!t1);
+            assert(!!t2);
+            assert(!!m1);
+            assert(!!m2);
         }
     };
 
@@ -367,6 +371,8 @@ RRTForest::RRTForest(const base::SpaceInformationPtr &si) : base::Planner(si, "R
 
     Planner::declareParam<double>("range", this, &RRTForest::setRange, &RRTForest::getRange, "0.:1.:10000.");
     connectionPoint_ = std::make_pair<base::State *, base::State *>(nullptr, nullptr);
+
+    d_.reset(new Private(si));
 }
 
 RRTForest::~RRTForest()
@@ -547,8 +553,13 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
 
     auto *rmotion = new Motion(si_);
     base::State *rstate = rmotion->state;
+    std::cerr << "rmotion: " << rmotion << std::endl;
+    std::cerr << "rstate: " << rstate << std::endl;
     bool startTree = true;
     bool solved = false;
+    TreeGrowingInfo temp_tgi;
+    temp_tgi.start = true;
+    temp_tgi.xstate = si_->allocState();
 
     while (!ptc)
     {
@@ -589,6 +600,7 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
                 auto &gs = gss[i];
                 gs = growTree(tree, tgi, rmotion);
         }
+        std::cerr << __LINE__ << " rstate: " << rstate << std::endl;
 
         /* attempt to connect trees */
 
@@ -596,6 +608,8 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
         /* 1. Collect trees that connected to the new sample */
         for (size_t to = 0; to < d_->forest_.size(); to++) {
             auto gs = gss[to];
+            if (gs == TRAPPED)
+                continue; // No new sample, skipped
             // Setup the new added milestone as the target
             Motion *addedMotion = tgis[to].xmotion;
             if (gs != REACHED)
@@ -605,8 +619,6 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
                 if (to == from)
                     continue;
                 GrowState gsc = ADVANCED;
-                TreeGrowingInfo temp_tgi;
-                temp_tgi.start = true;
                 // Try to connect the other tree to the new milestone in "to" tree
                 auto otherTree = d_->forest_[from];
                 while (gsc == ADVANCED)
@@ -692,6 +704,7 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
     for (auto& tgi : tgis)
         si_->freeState(tgi.xstate);
     si_->freeState(rstate);
+    si_->freeState(temp_tgi.xstate);
     delete rmotion;
 
     OMPL_INFORM("%s: Created %u states (%u start + %u goal)",
