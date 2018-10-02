@@ -34,8 +34,8 @@
 
 /* Author: Ioan Sucan */
 
-#ifndef OMPL_GEOMETRIC_PLANNERS_RRT_RRT_CONNECT_
-#define OMPL_GEOMETRIC_PLANNERS_RRT_RRT_CONNECT_
+#ifndef OMPL_GEOMETRIC_PLANNERS_RRT_RRT_FOREST_
+#define OMPL_GEOMETRIC_PLANNERS_RRT_RRT_FOREST_
 
 #include "ompl/geometric/planners/PlannerIncludes.h"
 #include "ompl/datastructures/NearestNeighbors.h"
