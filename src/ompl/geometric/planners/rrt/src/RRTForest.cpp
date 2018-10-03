@@ -97,6 +97,9 @@ struct RRTForest::Private {
                     RRTForest* rrt_forest,
                     std::function<double(Motion*, Motion*)> distance_function);
 
+    void connectNewSampleToForest(Motion* new_motion,
+                                  TreeData owner_tree);
+
     void unionTrees(const InterTreeConnection&);
 
     int findTreeSetId(TreeData tree);
@@ -158,6 +161,7 @@ void RRTForest::Private::initForest(const Eigen::MatrixXd& roots,
 
     // Setup roots for sample trees
     std::vector<double> sample(W);
+    std::vector<Motion*> root_motions;
     for (size_t i = 0; i < N; i++) {
         for (size_t j = 0; j < W; j++)
             sample[j] = roots(j, i);
@@ -167,25 +171,86 @@ void RRTForest::Private::initForest(const Eigen::MatrixXd& roots,
 
         auto& tree = forest_[i+TOTAL_INITIAL_TREE]; // Set forest_ from 2
         tree->nn->add(motion);
+        root_motions.emplace_back(motion);
     }
 
-    // TODO: union initial roots
-
     treeConnections_.clear();
+#if 0
+    for (size_t from = 0; from < N; from++) {
+        for (size_t to = from + 1; to < N; to++) {
+            auto valid = si_->checkMotion(root_motions[from]->state, root_motions[to]->state);
+            if (!valid)
+                continue;
+            unionTrees({forest_[from + TOTAL_INITIAL_TREE],
+                        forest_[to + TOTAL_INITIAL_TREE],
+                        root_motions[from],
+                        root_motions[to]});
+        }
+    }
+#else
+    for (size_t from = 0; from < N; from++) {
+        connectNewSampleToForest(root_motions[from], forest_[from + TOTAL_INITIAL_TREE]);
+    }
+#endif
+#if 1 // Debugging
+    std::cerr << "Tree Set ID after initial union" << std::endl;
+    for (auto& tree : forest_) {
+        std::cerr << findTreeSetId(tree) << " ";
+    }
+    std::cerr << std::endl;
+#endif
+    // TODO: init and goal
+}
+
+void RRTForest::Private::connectNewSampleToForest(Motion* new_motion,
+                                                  TreeData owner_tree)
+{
+    for (size_t to = 0; to < forest_.size(); to++) {
+#if 0
+        if (gss[to] == TRAPPED)
+            continue;
+#endif
+        // Now both From and To are not trapped.
+        // This means either of them can potentially reach the sampled
+        // state.
+        auto& to_tree = forest_[to];
+        if (to_tree->nn->size() == 0)
+            continue;
+        if (to_tree == owner_tree)
+            continue; // Skip self
+        if (findTreeSetId(owner_tree) == findTreeSetId(to_tree))
+            continue; // already merged
+        Motion *to_motion = nullptr;
+#if 0
+        if (gss[from] == REACHED && gss[to] == REACHED) {
+            // From and To already reached the sampled state
+            to_motion = tgis[to].xmotion;
+            d_->unionTrees({from_tree, to_tree,
+                           from_motion, to_motion});
+            continue;
+        }
+#endif
+        to_motion = to_tree->nn->nearest(new_motion);
+        if (!si_->checkMotion(new_motion->state, to_motion->state))
+            continue;
+        unionTrees({owner_tree, to_tree,
+                    new_motion, to_motion});
+    }
 }
 
 void RRTForest::Private::unionTrees(const InterTreeConnection& itc)
 {
     auto root1 = findTreeSetId(itc.tree1);
     auto root2 = findTreeSetId(itc.tree2);
-    if (root1 != root2)
-        treeDisjointSetId_(root1) = root2;
-
+    if (root1 == root2)
+        return ;
+    std::cerr << "Union Set " << root1 << " and Set " << root2 << std::endl;
+    treeDisjointSetId_(root1) = root2;
     treeConnections_.emplace_back(itc);
     int itc_id = treeConnections_.size();
 
-    treeAdj_(root1, root2) = itc_id;
-    treeAdj_(root2, root1) = -itc_id;
+    treeAdj_(itc.tree1->id, itc.tree2->id) = itc_id;
+    treeAdj_(itc.tree2->id, itc.tree1->id) = -itc_id;
 }
 
 int RRTForest::Private::findTreeSetId(TreeData tree)
@@ -228,6 +293,9 @@ RRTForest::Private::getSolutionPath()
     Eigen::VectorXi parent_itc = Eigen::VectorXi::Zero(treeDisjointSetId_.size());
     parent_tree(START_TREE) = START_TREE;
 
+    std::cerr << "Tree Adj:" << std::endl;
+    std::cerr << treeAdj_ << std::endl;
+
     std::queue<int> bfs_queue;
     bfs_queue.push(START_TREE);
     while (distance_from_start(GOAL_TREE) < 0) {
@@ -245,20 +313,29 @@ RRTForest::Private::getSolutionPath()
             bfs_queue.push(i);
         }
     }
+    std::cerr << "Tree parents: " << parent_tree.transpose() << std::endl;
     std::vector<int> path_tree_level;
     for (int now = GOAL_TREE; now != START_TREE; now = parent_tree(now))
         path_tree_level.push_back(now);
     std::reverse(path_tree_level.begin(), path_tree_level.end());
+    std::cerr << "Path at tree level: ";
+    for (auto tree_id : path_tree_level)
+        std::cerr << tree_id << " ";
+    std::cerr << std::endl;
 
     auto path = std::make_shared<PathGeometric>(si_);
     // Note: START_TREE is missing in path_tree_level and needs special
     //       handling
+    std::cerr << "Adding From START_TREE (0) to Tree " << parent_itc(path_tree_level[0]) << std::endl;
     addToPath(path, forest_[START_TREE], parent_itc(path_tree_level[0]));
-    for (size_t itc_now = 0; itc_now + 1 < path_tree_level.size(); itc_now++) {
-        auto itc_next = itc_now + 1;
-        addToPath(path, itc_now, itc_next);
+    for (size_t node_idx = 0; node_idx + 1 < path_tree_level.size(); node_idx++) {
+        int node1 = path_tree_level[node_idx];
+        int node2 = path_tree_level[node_idx + 1];
+        // Convert itc index in parent_itc to itc index in treeConnections_
+        addToPath(path, parent_itc(node1), parent_itc(node2));
     }
-    addToPath(path, parent_itc(path_tree_level[GOAL_TREE]), forest_[GOAL_TREE]);
+    std::cerr << "Adding From Tree " << parent_itc(path_tree_level[GOAL_TREE]) << " TO GOAL TREE" << std::endl;
+    addToPath(path, parent_itc(GOAL_TREE), forest_[GOAL_TREE]);
 
     return path;
 }
@@ -332,6 +409,10 @@ RRTForest::Private::addToPath(std::shared_ptr<PathGeometric> path,
     }
     while (to->parent != nullptr)
         to = to->parent;
+    std::cerr << "Adding From ";
+    si_->printState(from->state, std::cerr);
+    std::cerr << " to ";
+    si_->printState(to->state, std::cerr);
     addPathLCA(path, from, to);
 }
 
@@ -358,9 +439,11 @@ RRTForest::Private::addPathLCA(std::shared_ptr<PathGeometric> path,
         if (now == to_path.back())
             break;
         path->append(now->state);
+        si_->printState(now->state, std::cerr);
     }
     for (auto iter = to_path.rbegin(); iter != to_path.rend(); iter++) {
         path->append((*iter)->state);
+        si_->printState((*iter)->state, std::cerr);
     }
 }
 
@@ -520,12 +603,42 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
         return base::PlannerStatus::UNRECOGNIZED_GOAL_TYPE;
     }
 
+    {
+        // Add the milestone for goal
+        const base::State *st = tGoal_->nn->size() == 0 ? pis_.nextGoal(ptc) : pis_.nextGoal();
+        if (st != nullptr)
+        {
+            auto *motion = new Motion(si_);
+            si_->copyState(motion->state, st);
+            motion->root = motion->state;
+            tGoal_->nn->add(motion);
+            std::cerr << "Sample ";
+            si_->printState(motion->state, std::cerr);
+            std::cerr << " as GOAL STATE " << std::endl;
+        }
+
+        if (tGoal_->nn->size() == 0)
+        {
+            OMPL_ERROR("%s: Unable to sample any valid states for goal tree", getName().c_str());
+            return base::PlannerStatus::INVALID_GOAL;
+        }
+    }
+
+
     while (const base::State *st = pis_.nextStart())
     {
+        assert(si_->getStateValidityChecker()->isValid(st));
         auto *motion = new Motion(si_);
         si_->copyState(motion->state, st);
         motion->root = motion->state;
         tStart_->nn->add(motion);
+        d_->connectNewSampleToForest(motion, tStart_);
+
+        std::cerr << "Tree Set ID after adding start milestone" << std::endl;
+        for (auto& tree : d_->forest_) {
+            std::cerr << d_->findTreeSetId(tree) << " ";
+        }
+        std::cerr << std::endl;
     }
 
     if (tStart_->nn->size() == 0)
@@ -592,6 +705,7 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
         /* sample random state */
         sampler_->sampleUniform(rstate);
 
+        std::cerr << "GS ";
         /* grow every tree in the forest */
         for (size_t i = 0; i < d_->forest_.size(); i++) {
                 auto &tree = d_->forest_[i];
@@ -599,12 +713,14 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
                 tgi.start = true; // We do not treat goal tree specially.
                 auto &gs = gss[i];
                 gs = growTree(tree, tgi, rmotion);
+                std::cerr << gs << " ";
         }
-        std::cerr << __LINE__ << " rstate: " << rstate << std::endl;
+        // std::cerr << __LINE__ << " rstate: " << rstate << std::endl;
+        std::cerr << std::endl;
 
         /* attempt to connect trees */
 
-        bool merged = false;
+#if 0 // The following implementation is deprecated due to unnecessary complexity
         /* 1. Collect trees that connected to the new sample */
         for (size_t to = 0; to < d_->forest_.size(); to++) {
             auto gs = gss[to];
@@ -631,6 +747,39 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
                 merged = true;
             }
         }
+#else
+        for (size_t from = 0; from < d_->forest_.size(); from++) {
+            if (gss[from] == TRAPPED)
+                continue;
+            auto from_motion = tgis[from].xmotion;
+            auto& from_tree = d_->forest_[from];
+            d_->connectNewSampleToForest(from_motion, from_tree);
+#if 0
+            for (size_t to = 0; to < d_->forest_.size(); to++) {
+                if (gss[to] == TRAPPED)
+                    continue;
+                // Now both From and To are not trapped.
+                // This means either of them can potentially reach the sampled
+                // state.
+                auto& to_tree = d_->forest_[to];
+                Motion *to_motion = nullptr;
+                if (gss[from] == REACHED && gss[to] == REACHED) {
+                    // From and To already reached the sampled state
+                    to_motion = tgis[to].xmotion;
+                    d_->unionTrees({from_tree, to_tree,
+                                    from_motion, to_motion});
+                    continue;
+                }
+                to_motion = to_tree->nn->nearest(from_motion);
+                if (!si_->checkMotion(from_motion->state, to_motion->state))
+                    continue;
+                d_->unionTrees({from_tree, to_tree,
+                                from_motion, to_motion});
+            }
+#endif
+        }
+#endif
+
 
 #if 0
         /* remember which motion was just added */
@@ -652,7 +801,9 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
 #endif
         // Note: start and goal may connect indirectly. Hence we need to
         //       query the disjoint set each time when union occurs.
-        if (merged && d_->findTreeSetId(tStart_) == d_->findTreeSetId(tGoal_)) {
+        // Note2: always query even without merging since it is cheaper than
+        //        tracking merging states correctly.
+        if (d_->findTreeSetId(tStart_) == d_->findTreeSetId(tGoal_)) {
             // TODO:
             // Build the solution tree is tedious, offload this to another
             // function.
