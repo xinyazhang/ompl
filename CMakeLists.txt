@@ -99,10 +99,11 @@ find_package(Python QUIET)
 find_package(Boost COMPONENTS python QUIET)
 
 # Eigen is needed for the InformedStateSampler
-find_package(Eigen3 QUIET)
+find_package(Eigen3 Required)
 if (EIGEN3_FOUND)
     set(OMPL_HAVE_EIGEN3 1)
     include_directories("${EIGEN3_INCLUDE_DIR}")
+    message(STATUS "Found Eigen3 at ${EIGEN3_INCLUDE_DIR}")
 endif()
 
 # MORSE is only needed for Modular OpenRobots Simulation Engine bindings
