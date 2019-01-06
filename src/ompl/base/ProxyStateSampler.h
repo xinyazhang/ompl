@@ -63,7 +63,11 @@ namespace ompl
             virtual void sampleUniformNear(State *state, const State *near, double distance) override;
             virtual void sampleGaussian(State *state, const State *mean, double stdDev) override;
 
-            void cacheState(size_t begin,
+	    /*
+ 	     * Positive begin: cache state after some states
+	     * Negative begin: use the cached states after every `begin` states
+	     */
+            void cacheState(ssize_t begin,
                             std::vector<std::vector<double>> states); // Call with std::move to save object copy
         protected:
             /** \brief The sampler to proxy */

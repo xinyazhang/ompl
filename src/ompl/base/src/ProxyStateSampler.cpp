@@ -44,7 +44,7 @@ namespace base {
 
 struct ProxyStateSampler::ProxyCache {
 	using StateArray = std::vector<std::vector<double>>;
-	std::vector<size_t> begins_;
+	std::vector<ssize_t> begins_;
 	std::vector<StateArray> arrays_;
 	size_t index_ = 0;
 	const StateSpace *space_;
@@ -54,7 +54,7 @@ struct ProxyStateSampler::ProxyCache {
 	{
 	}
 
-	void cache(size_t begin,
+	void cache(ssize_t begin,
 		   StateArray&& states)
 	{
 		begins_.emplace_back(begin);
@@ -66,12 +66,25 @@ struct ProxyStateSampler::ProxyCache {
 		bool ret = false;
 		for (size_t i = 0; i < begins_.size(); i++) {
 			// std::cerr << "Looking up the cache: " << index_ << " in [" << begins_[i] << ", " << begins_[i] + arrays_[i].size() << "]\n";
-			if (index_ >= begins_[i] && index_ < begins_[i] + arrays_[i].size()) {
-				size_t off = index_ - begins_[i];
-				// std::cerr << "Supply sample from cached block " << i << " at offset " << off << std::endl;
-				space_->copyFromReals(state, arrays_[i][off]);
-				ret = true;
-				break;
+			if (begins_[i] >= 0) {
+				if (index_ >= begins_[i] && index_ < begins_[i] + arrays_[i].size()) {
+					size_t off = index_ - begins_[i];
+					// std::cerr << "Supply sample from cached block " << i << " at offset " << off << std::endl;
+					space_->copyFromReals(state, arrays_[i][off]);
+					ret = true;
+					break;
+				}
+			} else {
+				size_t begin = size_t(std::abs(begins_[i]));
+				size_t end = begin + arrays_[i].size();
+				if (index_ > begin && index_ < end) {
+					size_t off = index_ - begin;
+					space_->copyFromReals(state, arrays_[i][off]);
+					ret = true;
+					break;
+				} else if (index_ >= end) {
+					index_ = 0; // reset to zero
+				}
 			}
 		}
 		index_++;
@@ -92,7 +105,7 @@ ProxyStateSampler::~ProxyStateSampler()
 {
 }
 
-void ProxyStateSampler::cacheState(size_t begin,
+void ProxyStateSampler::cacheState(ssize_t begin,
                                    std::vector<std::vector<double>> states)
 {
 	cache_->cache(begin, std::move(states));
