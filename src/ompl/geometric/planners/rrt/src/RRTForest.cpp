@@ -40,6 +40,8 @@
 
 #include <queue>
 
+#define VERBOSE 0
+
 namespace ompl {
 namespace geometric {
 
@@ -146,6 +148,7 @@ void RRTForest::Private::initForest(const Eigen::MatrixXd& roots,
     // Note: roots are col-major and each column stores one root
     size_t N = roots.cols();
     size_t W = roots.rows(); // W: Width of the state vector
+    std::cerr << "init forest with N=" << N << " and W=" << W << std::endl;
     treeAdj_.setZero(N + TOTAL_INITIAL_TREE, N + TOTAL_INITIAL_TREE);
     treeDisjointSetId_.resize(N + TOTAL_INITIAL_TREE);
 
@@ -244,7 +247,9 @@ void RRTForest::Private::unionTrees(const InterTreeConnection& itc)
     auto root2 = findTreeSetId(itc.tree2);
     if (root1 == root2)
         return ;
+#if VERBOSE
     std::cerr << "Union Set " << root1 << " and Set " << root2 << std::endl;
+#endif
     treeDisjointSetId_(root1) = root2;
     treeConnections_.emplace_back(itc);
     int itc_id = treeConnections_.size();
@@ -293,8 +298,10 @@ RRTForest::Private::getSolutionPath()
     Eigen::VectorXi parent_itc = Eigen::VectorXi::Zero(treeDisjointSetId_.size());
     parent_tree(START_TREE) = START_TREE;
 
+#if VERBOSE
     std::cerr << "Tree Adj:" << std::endl;
     std::cerr << treeAdj_ << std::endl;
+#endif
 
     std::queue<int> bfs_queue;
     bfs_queue.push(START_TREE);
@@ -313,15 +320,19 @@ RRTForest::Private::getSolutionPath()
             bfs_queue.push(i);
         }
     }
+#if VERBOSE
     std::cerr << "Tree parents: " << parent_tree.transpose() << std::endl;
+#endif
     std::vector<int> path_tree_level;
     for (int now = GOAL_TREE; now != START_TREE; now = parent_tree(now))
         path_tree_level.push_back(now);
     std::reverse(path_tree_level.begin(), path_tree_level.end());
+#if VERBOSE
     std::cerr << "Path at tree level: ";
     for (auto tree_id : path_tree_level)
         std::cerr << tree_id << " ";
     std::cerr << std::endl;
+#endif
 
     auto path = std::make_shared<PathGeometric>(si_);
     // Note: START_TREE is missing in path_tree_level and needs special
@@ -334,7 +345,9 @@ RRTForest::Private::getSolutionPath()
         // Convert itc index in parent_itc to itc index in treeConnections_
         addToPath(path, parent_itc(node1), parent_itc(node2));
     }
+#if VERBOSE
     std::cerr << "Adding From Tree " << parent_itc(path_tree_level[GOAL_TREE]) << " TO GOAL TREE" << std::endl;
+#endif
     addToPath(path, parent_itc(GOAL_TREE), forest_[GOAL_TREE]);
 
     return path;
@@ -409,10 +422,12 @@ RRTForest::Private::addToPath(std::shared_ptr<PathGeometric> path,
     }
     while (to->parent != nullptr)
         to = to->parent;
+#if VERBOSE
     std::cerr << "Adding From ";
     si_->printState(from->state, std::cerr);
     std::cerr << " to ";
     si_->printState(to->state, std::cerr);
+#endif
     addPathLCA(path, from, to);
 }
 
@@ -439,11 +454,15 @@ RRTForest::Private::addPathLCA(std::shared_ptr<PathGeometric> path,
         if (now == to_path.back())
             break;
         path->append(now->state);
+#if VERBOSE
         si_->printState(now->state, std::cerr);
+#endif
     }
     for (auto iter = to_path.rbegin(); iter != to_path.rend(); iter++) {
         path->append((*iter)->state);
+#if VERBOSE
         si_->printState((*iter)->state, std::cerr);
+#endif
     }
 }
 
@@ -612,9 +631,11 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
             si_->copyState(motion->state, st);
             motion->root = motion->state;
             tGoal_->nn->add(motion);
+#if VERBOSE
             std::cerr << "Sample ";
             si_->printState(motion->state, std::cerr);
             std::cerr << " as GOAL STATE " << std::endl;
+#endif
         }
 
         if (tGoal_->nn->size() == 0)
@@ -705,18 +726,27 @@ RRTForest::solve(const base::PlannerTerminationCondition &ptc)
         /* sample random state */
         sampler_->sampleUniform(rstate);
 
+#if VERBOSE
         std::cerr << "GS ";
+#endif
         /* grow every tree in the forest */
         for (size_t i = 0; i < d_->forest_.size(); i++) {
                 auto &tree = d_->forest_[i];
+                // Skip merged trees, for speeding up
+                if (tree->id != d_->findTreeSetId(tree))
+                    continue;
                 auto &tgi = tgis[i];
                 tgi.start = true; // We do not treat goal tree specially.
                 auto &gs = gss[i];
                 gs = growTree(tree, tgi, rmotion);
+#if VERBOSE
                 std::cerr << gs << " ";
+#endif
         }
         // std::cerr << __LINE__ << " rstate: " << rstate << std::endl;
+#if VERBOSE
         std::cerr << std::endl;
+#endif
 
         /* attempt to connect trees */
 
