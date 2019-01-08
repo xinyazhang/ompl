@@ -124,9 +124,12 @@ ompl::base::PlannerStatus ompl::geometric::SimpleSetup::solve(double time)
     lastStatus_ = base::PlannerStatus::UNKNOWN;
     time::point start = time::now();
     lastStatus_ = planner_->solve(time);
+    const char* approx = "";
+    if (lastStatus_ == ompl::base::PlannerStatus::APPROXIMATE_SOLUTION)
+	    approx = "Approx. ";
     planTime_ = time::seconds(time::now() - start);
     if (lastStatus_)
-        OMPL_INFORM("Solution found in %f seconds", planTime_);
+        OMPL_INFORM("%sSolution found in %f seconds", approx, planTime_);
     else
         OMPL_INFORM("No solution found after %f seconds", planTime_);
     return lastStatus_;
@@ -138,9 +141,12 @@ ompl::base::PlannerStatus ompl::geometric::SimpleSetup::solve(const base::Planne
     lastStatus_ = base::PlannerStatus::UNKNOWN;
     time::point start = time::now();
     lastStatus_ = planner_->solve(ptc);
+    const char* approx = "";
+    if (lastStatus_ == ompl::base::PlannerStatus::APPROXIMATE_SOLUTION)
+	    approx = "Approx. ";
     planTime_ = time::seconds(time::now() - start);
     if (lastStatus_)
-        OMPL_INFORM("Solution found in %f seconds", planTime_);
+        OMPL_INFORM("%sSolution found in %f seconds", approx, planTime_);
     else
         OMPL_INFORM("No solution found after %f seconds", planTime_);
     return lastStatus_;
