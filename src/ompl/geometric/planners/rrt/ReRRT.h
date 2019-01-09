@@ -121,7 +121,7 @@ namespace ompl
 
             virtual void setup();
 
-	    void setStateInjection(size_t start_from, std::vector<std::vector<double>> samples);
+	    void setStateInjection(ssize_t start_from, std::vector<std::vector<double>> samples);
 	    void setKNearest(int K) { knearest_ = K; }
 
         protected:
@@ -183,7 +183,7 @@ namespace ompl
             /** \brief The most recent goal motion.  Used for PlannerData computation */
             Motion                                         *lastGoalMotion_;
 
-	    size_t sample_injection_;
+	    ssize_t sample_injection_;
 	    std::vector<std::vector<double>> samples_to_inject_;
 	    int knearest_;
         };

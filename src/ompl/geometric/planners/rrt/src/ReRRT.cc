@@ -147,26 +147,31 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     base::State *rstate = rmotion->state;
     base::State *xstate = si_->allocState();
     base::State *restate = si_->allocState();
-    size_t nsample_created = 0;
-    size_t nsample_injected = 0;
+    ssize_t nsample_counter = 0; // Count the number of normal samples
+    ssize_t sample_injection_off = 0; // Track the sample to inject with offset
     bool sat = false;
 
     while (ptc == false && !sat)
     {
-	bool injecting = (nsample_created >= sample_injection_ && nsample_injected < samples_to_inject_.size());
+	bool oor = (sample_injection_off >= samples_to_inject_.size()); // out of range
+	bool injecting = (nsample_counter >= std::abs(sample_injection_) && !oor);
 	if (injecting) {
-	    si_->getStateSpace()->copyFromReals(rstate, samples_to_inject_[nsample_injected]);
+	    si_->getStateSpace()->copyFromReals(rstate, samples_to_inject_[sample_injection_off]);
 #if 0
 	    std::cout << getName() << ": Injecting state ";
 	    print_state(std::cout, rstate, si_) << std::endl;
 #endif
-	    nsample_injected++;
 	} else {
 	    /* sample random state (with goal biasing) */
 	    if (goal_s && rng_.uniform01() < goalBias_ && goal_s->canSample())
 		goal_s->sampleGoal(rstate);
 	    else
 		sampler_->sampleUniform(rstate);
+	}
+	// Reset nsample_counter if periodicity is required
+	if (sample_injection_ < 0 && oor) {
+	    nsample_counter = 0;
+	    sample_injection_off = 0;
 	}
 
 	std::vector<Motion*> nmotions;
@@ -179,6 +184,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	OMPL_INFORM("%s: Find %d neighbors", getName().c_str(), nmotions.size());
 #endif
         /* find closest state in the tree */
+	bool directly_connected = false;
 	for (auto nmotion: nmotions) {
 	    base::State *dstate = rstate;
 
@@ -192,7 +198,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 
 	    bool to_create_motion = true;
 	    std::pair<base::State*, double> lastValid(restate, 0.0);
-	    bool directly_connected = si_->checkMotion(nmotion->state, dstate, lastValid);
+	    directly_connected = si_->checkMotion(nmotion->state, dstate, lastValid);
 	    if (!directly_connected) {
 		if (lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
 		    si_->copyState(dstate, lastValid.first);
@@ -239,10 +245,21 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		    approxdif = dist;
 		    approxsol = motion;
 		}
-		nsample_created++;
+		nsample_counter++;
 	    }
 	    if (directly_connected)
 		break;
+	}
+	// Special processing for sample injection case
+	if (injecting) {
+	    if (!directly_connected) {
+		// Proceed to the next
+		sample_injection_off += 1;
+	    } else {
+		// Remove current sample
+		// Note: do NOT add the offset
+		samples_to_inject_.erase(samples_to_inject_.begin() + sample_injection_off);
+	    }
 	}
     }
 
@@ -286,7 +303,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     return base::PlannerStatus(solved, approximate);
 }
 
-void ompl::geometric::ReRRT::setStateInjection(size_t start_from, std::vector<std::vector<double>> samples)
+void ompl::geometric::ReRRT::setStateInjection(ssize_t start_from, std::vector<std::vector<double>> samples)
 {
     sample_injection_ = start_from;
     samples_to_inject_ = std::move(samples);
