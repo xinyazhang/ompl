@@ -48,6 +48,8 @@
 #include "ompl/util/ClassForward.h"
 #include "ompl/util/Deprecation.h"
 #include <functional>
+#include <Eigen/Core>
+#include <Eigen/SparseCore>
 #include <boost/concept_check.hpp>
 #include <string>
 #include <map>
@@ -303,6 +305,10 @@ namespace ompl
                 datastructure, between calls to solve(), for example
                 (without calling clear() in between).  */
             virtual void getPlannerData(PlannerData &data) const;
+
+            /** \brief Load a subgraph to current roadmap
+             */
+            virtual void addGraph(const Eigen::Ref<const Eigen::MatrixXd> V, const Eigen::Ref<const Eigen::SparseMatrix<uint8_t>> E);
 
             /** \brief Get the name of the planner */
             const std::string &getName() const;

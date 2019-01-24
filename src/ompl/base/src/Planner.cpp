@@ -122,6 +122,11 @@ void ompl::base::Planner::getPlannerData(PlannerData &data) const
         data.properties[plannerProgressProperty.first] = plannerProgressProperty.second();
 }
 
+void ompl::base::Planner::addGraph(const Eigen::Ref<const Eigen::MatrixXd> V, const Eigen::Ref<const Eigen::SparseMatrix<uint8_t>> E)
+{
+    throw std::runtime_error("addGraph not implemented in Planner " + getName());
+}
+
 ompl::base::PlannerStatus ompl::base::Planner::solve(const PlannerTerminationConditionFn &ptc, double checkInterval)
 {
     return solve(PlannerTerminationCondition(ptc, checkInterval));

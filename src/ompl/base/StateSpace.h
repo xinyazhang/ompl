@@ -44,6 +44,7 @@
 #include "ompl/base/GenericParam.h"
 #include "ompl/util/Console.h"
 #include "ompl/util/ClassForward.h"
+#include <Eigen/Core>
 #include <boost/concept_check.hpp>
 #include <iostream>
 #include <vector>
@@ -405,6 +406,9 @@ namespace ompl
 
             /** \brief Copy the values from \e reals to the state \e destination using getValueAddressAtLocation() */
             virtual void copyFromReals(State *destination, const std::vector<double> &reals) const;
+
+            /** \brief Copy the values from \e e3vector to the state \e destination using getValueAddressAtLocation() */
+            virtual void copyFromEigen3(State *destination, const Eigen::Ref<const Eigen::VectorXd> e3vector) const;
 
             /** @} */
 

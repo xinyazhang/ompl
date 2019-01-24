@@ -191,6 +191,10 @@ namespace ompl
 
             void getPlannerData(base::PlannerData &data) const override;
 
+            /** \brief Load a subgraph to current roadmap
+             */
+            void addGraph(const Eigen::Ref<const Eigen::MatrixXd> V, const Eigen::Ref<const Eigen::SparseMatrix<uint8_t>> E) override;
+
             /** \brief While the termination condition allows, this function will construct the roadmap (using
                growRoadmap() and expandRoadmap(),
                 maintaining a 2:1 ratio for growing/expansion of roadmap) */

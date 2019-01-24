@@ -341,6 +341,14 @@ void ompl::base::StateSpace::copyFromReals(State *destination, const std::vector
         *getValueAddressAtLocation(destination, locations[i]) = reals[i];
 }
 
+void ompl::base::StateSpace::copyFromEigen3(State *destination, const Eigen::Ref<const Eigen::VectorXd> e3vector) const
+{
+    const auto &locations = getValueLocations();
+    assert(e3vector.size() == locations.size());
+    for (long i = 0; i < e3vector.size(); ++i)
+        *getValueAddressAtLocation(destination, locations[i]) = e3vector(i);
+}
+
 double *ompl::base::StateSpace::getValueAddressAtLocation(State *state, const ValueLocation &loc) const
 {
     std::size_t index = 0;

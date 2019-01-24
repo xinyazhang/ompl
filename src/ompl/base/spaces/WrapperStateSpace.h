@@ -39,6 +39,7 @@
 
 #include <utility>
 
+#include <Eigen/Core>
 #include "ompl/base/StateSpace.h"
 
 namespace ompl
@@ -368,6 +369,11 @@ namespace ompl
             {
                 space_->copyFromReals(destination->as<StateType>()->getState(), reals);
             }
+
+            void copyFromEigen3(State *destination, const Eigen::Ref<const Eigen::VectorXd> e3vector) const override
+	    {
+                space_->copyFromEigen3(destination->as<StateType>()->getState(), e3vector);
+	    }
 
             void registerProjections() override
             {

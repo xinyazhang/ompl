@@ -563,6 +563,41 @@ ompl::geometric::PRM::Vertex ompl::geometric::PRM::addMilestone(base::State *sta
     return m;
 }
 
+void ompl::geometric::PRM::addGraph(const Eigen::Ref<const Eigen::MatrixXd> V, const Eigen::Ref<const Eigen::SparseMatrix<uint8_t>> E)
+{
+    std::lock_guard<std::mutex> _(graphMutex_);
+    base::State *workState = si_->allocState();
+    int NV = V.rows();
+
+    std::vector<Vertex> ms; // ms: MilestoneS
+    ms.reserve(V.rows());
+    auto ss = si_->getStateSpace();
+    for (int i = 0; i < NV; i++) {
+        ms.emplace_back(boost::add_vertex(g_));
+        ss->copyFromEigen3(workState, V.row(i));
+        stateProperty_[ms.back()] = si_->cloneState(workState);
+        disjointSets_.make_set(ms.back());
+    }
+    using GraphE = Eigen::SparseMatrix<uint8_t>;
+    const GraphE &EE = E; // InnerIterator cannot handle Eigen::Ref transparently
+    for (GraphE::Index k = 0; k < E.outerSize(); ++k) {
+        for (GraphE::InnerIterator it(EE, k); it; ++it) {
+            auto from = it.row();
+            auto to = it.col();
+            const auto& vfrom = ms[from];
+            const auto& vto = ms[to];
+            const base::Cost weight = opt_->motionCost(stateProperty_[vfrom], stateProperty_[vto]);
+            const Graph::edge_property_type properties(weight);
+            boost::add_edge(vfrom, vto, properties, g_);
+            uniteComponents(vfrom, vto);
+        }
+    }
+
+    for (const auto& m : ms)
+        nn_->add(m);
+    si_->freeState(workState);
+}
+
 void ompl::geometric::PRM::uniteComponents(Vertex m1, Vertex m2)
 {
     disjointSets_.union_set(m1, m2);
