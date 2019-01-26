@@ -470,7 +470,7 @@ ompl::base::PlannerStatus ompl::geometric::PRM::solve(const base::PlannerTermina
 
     OMPL_INFORM("%s: Created %u states", getName().c_str(), boost::num_vertices(g_) - nrStartStates);
 
-    if (sol)
+    if (addedNewSolution_)
     {
         base::PlannerSolution psol(sol);
         psol.setPlannerName(getName());
