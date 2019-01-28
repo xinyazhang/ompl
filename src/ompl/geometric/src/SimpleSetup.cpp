@@ -125,8 +125,12 @@ ompl::base::PlannerStatus ompl::geometric::SimpleSetup::solve(double time)
     time::point start = time::now();
     lastStatus_ = planner_->solve(time);
     planTime_ = time::seconds(time::now() - start);
-    if (lastStatus_)
+    if (lastStatus_ == base::PlannerStatus::EXACT_SOLUTION)
         OMPL_INFORM("Solution found in %f seconds", planTime_);
+    else if (lastStatus_ == base::PlannerStatus::APPROXIMATE_SOLUTION)
+        OMPL_INFORM("Approx. solution found in %f seconds", planTime_);
+    else if (lastStatus_ == base::PlannerStatus::TIMEOUT)
+        OMPL_INFORM("Timeout %f seconds", planTime_);
     else
         OMPL_INFORM("No solution found after %f seconds", planTime_);
     return lastStatus_;
