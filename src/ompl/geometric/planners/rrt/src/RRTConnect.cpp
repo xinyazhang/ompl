@@ -37,6 +37,7 @@
 #include "ompl/geometric/planners/rrt/RRTConnect.h"
 #include "ompl/base/goals/GoalSampleableRegion.h"
 #include "ompl/tools/config/SelfConfig.h"
+#include <iostream>
 
 ompl::geometric::RRTConnect::RRTConnect(const base::SpaceInformationPtr &si, bool addIntermediateStates)
   : base::Planner(si, addIntermediateStates ? "RRTConnectIntermediate" : "RRTConnect")
@@ -138,13 +139,19 @@ ompl::geometric::RRTConnect::GrowState ompl::geometric::RRTConnect::growTree(Tre
         reach = false;
     }
 
-    bool validMotion = tgi.start ? si_->checkMotion(nmotion->state, dstate) :
-                                   si_->isValid(dstate) && si_->checkMotion(dstate, nmotion->state);
+    std::pair<base::State*, double> lastValid(restate_, 0.0);
+    bool validMotion;
+    if (!enableDenseTree_) {
+	    validMotion = tgi.start ? si_->checkMotion(nmotion->state, dstate) :
+                                      si_->isValid(dstate) && si_->checkMotion(dstate, nmotion->state);
+    } else {
+	    validMotion = si_->checkMotion(nmotion->state, dstate, lastValid);
+    }
 
-    if (!validMotion)
+    if (!enableDenseTree_ && !validMotion)
         return TRAPPED;
 
-    if (addIntermediateStates_)
+    if (!enableDenseTree_ && addIntermediateStates_)
     {
         const base::State *astate = tgi.start ? nmotion->state : dstate;
         const base::State *bstate = tgi.start ? dstate : nmotion->state;
@@ -171,7 +178,17 @@ ompl::geometric::RRTConnect::GrowState ompl::geometric::RRTConnect::growTree(Tre
     else
     {
         Motion *motion = new Motion(si_);
-        si_->copyState(motion->state, dstate);
+        if (validMotion) {
+		// std::cerr << "add valid motion" << std::endl;
+		si_->copyState(motion->state, dstate);
+	} else if (enableDenseTree_ && lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
+		// std::cerr << "add motion with tau = " << lastValid.second << std::endl;
+		si_->copyState(motion->state, lastValid.first);
+		reach = false;
+	} else {
+		// std::cerr << "trapped" << std::endl;
+		return TRAPPED;
+	}
         motion->parent = nmotion;
         motion->root = nmotion->root;
         tree->add(motion);
@@ -221,6 +238,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
 
     TreeGrowingInfo tgi;
     tgi.xstate = si_->allocState();
+    restate_ = si_->allocState();
 
     Motion *approxsol = nullptr;
     double approxdif = std::numeric_limits<double>::infinity();
@@ -287,7 +305,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
             Motion *goalMotion = startTree ? addedMotion : tgi.xmotion;
 
             /* if we connected the trees in a valid way (start and goal pair is valid)*/
-            if (gsc == REACHED && goal->isStartGoalPairValid(startMotion->root, goalMotion->root))
+            if (gs == REACHED && gsc == REACHED && goal->isStartGoalPairValid(startMotion->root, goalMotion->root))
             {
                 // it must be the case that either the start tree or the goal tree has made some progress
                 // so one of the parents is not nullptr. We go one step 'back' to avoid having a duplicate state
@@ -348,6 +366,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
 
     si_->freeState(tgi.xstate);
     si_->freeState(rstate);
+    si_->freeState(restate_);
     delete rmotion;
 
     OMPL_INFORM("%s: Created %u states (%u start + %u goal)", getName().c_str(), tStart_->size() + tGoal_->size(),

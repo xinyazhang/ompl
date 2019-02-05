@@ -86,6 +86,16 @@ namespace ompl
                 addIntermediateStates_ = addIntermediateStates;
             }
 
+            bool getDenseTree() const
+            {
+                return enableDenseTree_;
+            }
+
+            void setDenseTree(bool enableDenseTree)
+            {
+                enableDenseTree_ = enableDenseTree;
+            }
+
             /** \brief Set the range the planner is supposed to use.
 
                 This parameter greatly influences the runtime of the
@@ -182,6 +192,9 @@ namespace ompl
 
             /** \brief Flag indicating whether intermediate states are added to the built tree of motions */
             bool addIntermediateStates_;
+	    base::State *restate_;
+
+            bool enableDenseTree_ = false;
 
             /** \brief The random number generator */
             RNG rng_;
