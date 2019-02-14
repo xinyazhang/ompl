@@ -73,6 +73,18 @@ void ompl::geometric::RRTConnect::setup()
     tGoal_->setDistanceFunction([this](const Motion *a, const Motion *b) { return distanceFunction(a, b); });
 }
 
+void ompl::geometric::RRTConnect::setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q)
+{
+    predefined_samples_ = Q;
+}
+
+void ompl::geometric::RRTConnect::getSampleSetConnectivity(Eigen::SparseMatrix<int>& C)
+{
+    C.resize(1, predefined_samples_.rows());
+    C.setZero();
+    C.setFromTriplets(connectivity_tup_.begin(), connectivity_tup_.end());
+}
+
 void ompl::geometric::RRTConnect::freeMemory()
 {
     std::vector<Motion *> motions;
@@ -142,10 +154,10 @@ ompl::geometric::RRTConnect::GrowState ompl::geometric::RRTConnect::growTree(Tre
     std::pair<base::State*, double> lastValid(restate_, 0.0);
     bool validMotion;
     if (!enableDenseTree_) {
-	    validMotion = tgi.start ? si_->checkMotion(nmotion->state, dstate) :
+            validMotion = tgi.start ? si_->checkMotion(nmotion->state, dstate) :
                                       si_->isValid(dstate) && si_->checkMotion(dstate, nmotion->state);
     } else {
-	    validMotion = si_->checkMotion(nmotion->state, dstate, lastValid);
+            validMotion = si_->checkMotion(nmotion->state, dstate, lastValid);
     }
 
     if (!enableDenseTree_ && !validMotion)
@@ -179,16 +191,16 @@ ompl::geometric::RRTConnect::GrowState ompl::geometric::RRTConnect::growTree(Tre
     {
         Motion *motion = new Motion(si_);
         if (validMotion) {
-		// std::cerr << "add valid motion" << std::endl;
-		si_->copyState(motion->state, dstate);
-	} else if (enableDenseTree_ && lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
-		// std::cerr << "add motion with tau = " << lastValid.second << std::endl;
-		si_->copyState(motion->state, lastValid.first);
-		reach = false;
-	} else {
-		// std::cerr << "trapped" << std::endl;
-		return TRAPPED;
-	}
+                // std::cerr << "add valid motion" << std::endl;
+                si_->copyState(motion->state, dstate);
+        } else if (enableDenseTree_ && lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
+                // std::cerr << "add motion with tau = " << lastValid.second << std::endl;
+                si_->copyState(motion->state, lastValid.first);
+                reach = false;
+        } else {
+                // std::cerr << "trapped" << std::endl;
+                return TRAPPED;
+        }
         motion->parent = nmotion;
         motion->root = nmotion->root;
         tree->add(motion);
@@ -210,11 +222,13 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
         return base::PlannerStatus::UNRECOGNIZED_GOAL_TYPE;
     }
 
+    bool has_valid_start = false;
     while (const base::State *st = pis_.nextStart())
     {
         auto *motion = new Motion(si_);
         si_->copyState(motion->state, st);
         motion->root = motion->state;
+        has_valid_start = has_valid_start || si_->isValid(st);
         tStart_->add(motion);
     }
 
@@ -222,6 +236,13 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
     {
         OMPL_ERROR("%s: Motion planning start tree could not be initialized!", getName().c_str());
         return base::PlannerStatus::INVALID_START;
+    }
+
+    if (!has_valid_start) {
+        OMPL_ERROR("%s: Initial State is not collision free!", getName().c_str());
+        return base::PlannerStatus::INVALID_START;
+    } else {
+        OMPL_INFORM("%s: Initial State Verified.", getName().c_str());
     }
 
     if (!goal->couldSample())
@@ -246,6 +267,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
     base::State *rstate = rmotion->state;
     bool startTree = true;
     bool solved = false;
+    ssize_t iteration = 0;
 
     while (!ptc)
     {
@@ -263,6 +285,10 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
                 si_->copyState(motion->state, st);
                 motion->root = motion->state;
                 tGoal_->add(motion);
+                if (si_->isValid(st))
+                        OMPL_INFORM("%s: Add one verified valid state to goal", getName().c_str());
+                else
+                        OMPL_ERROR("%s: The Goal state is not collision free!", getName().c_str());
             }
 
             if (tGoal_->size() == 0)
@@ -273,7 +299,15 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
         }
 
         /* sample random state */
-        sampler_->sampleUniform(rstate);
+        if (predefined_samples_.rows() > 0) {
+            if (iteration >= predefined_samples_.rows())
+                break;
+            // Override sampler
+            si_->getStateSpace()->copyFromEigen3(rstate, predefined_samples_.row(iteration));
+        } else {
+                sampler_->sampleUniform(rstate);
+        }
+        iteration++;
 
         GrowState gs = growTree(tree, tgi, rmotion);
 
@@ -369,8 +403,8 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
     si_->freeState(restate_);
     delete rmotion;
 
-    OMPL_INFORM("%s: Created %u states (%u start + %u goal)", getName().c_str(), tStart_->size() + tGoal_->size(),
-                tStart_->size(), tGoal_->size());
+    OMPL_INFORM("%s: Created %u states (%u start + %u goal) after %ld iterations", getName().c_str(), tStart_->size() + tGoal_->size(),
+                tStart_->size(), tGoal_->size(), iteration);
 
     if (approxsol && !solved)
     {

@@ -126,6 +126,9 @@ namespace ompl
 
             void setup() override;
 
+	    virtual void setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q) override;
+	    virtual void getSampleSetConnectivity(Eigen::SparseMatrix<int>& ) override;
+
         protected:
             /** \brief Representation of a motion */
             class Motion
@@ -204,6 +207,9 @@ namespace ompl
 
             /** \brief Distance between the nearest pair of start tree and goal tree nodes. */
             double distanceBetweenTrees_;
+
+	    Eigen::MatrixXd predefined_samples_;
+	    std::vector<Eigen::Triplet<int>> connectivity_tup_;
         };
     }
 }
