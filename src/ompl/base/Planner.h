@@ -366,6 +366,14 @@ namespace ompl
             /** \brief Print information about the motion planner's settings */
             virtual void printSettings(std::ostream &out) const;
 
+            /** \brief After calling this function, the planner will
+ 	     * 1. Using samples provided by Q instead of samplers allocated by si_ (SpaceInformationPtr)
+	     * 2. Terminate immediately after all samples are consumed, rather
+	     *    than waiting for ptc becomes true
+             */
+            virtual void setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q);
+            virtual void getSampleSetConnectivity(Eigen::SparseMatrix<int>& ); // sparse connectivity matrix, size (1, Q.rows())
+
         protected:
             /** \brief This function declares a parameter for this planner instance, and specifies the setter and getter
              * functions. */

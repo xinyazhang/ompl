@@ -159,6 +159,16 @@ void ompl::base::Planner::printSettings(std::ostream &out) const
     params_.print(out);
 }
 
+void ompl::base::Planner::setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> )
+{
+    throw std::runtime_error("setSampleSet not implemented in Planner " + getName());
+}
+
+void ompl::base::Planner::getSampleSetConnectivity(Eigen::SparseMatrix<int>& )
+{
+    throw std::runtime_error("getSampleSetConnectivity not implemented in Planner " + getName());
+}
+
 void ompl::base::PlannerInputStates::clear()
 {
     if (tempState_ != nullptr)
