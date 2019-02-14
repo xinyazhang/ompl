@@ -124,6 +124,9 @@ namespace ompl
 	    void setStateInjection(size_t start_from, std::vector<std::vector<double>> samples);
 	    void setKNearest(int K) { knearest_ = K; }
 
+	    virtual void setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q) override;
+	    virtual void getSampleSetConnectivity(Eigen::SparseMatrix<int>& ) override;
+
         protected:
 
 
@@ -186,6 +189,9 @@ namespace ompl
 	    size_t sample_injection_;
 	    std::vector<std::vector<double>> samples_to_inject_;
 	    int knearest_;
+
+	    Eigen::MatrixXd predefined_samples_;
+	    std::vector<Eigen::Triplet<int>> connectivity_tup_;
         };
 
     }

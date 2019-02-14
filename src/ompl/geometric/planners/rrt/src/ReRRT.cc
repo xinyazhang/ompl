@@ -82,6 +82,18 @@ void ompl::geometric::ReRRT::setup()
     nn_->setDistanceFunction(std::bind(&ReRRT::distanceFunction, this, std::placeholders::_1, std::placeholders::_2));
 }
 
+void ompl::geometric::ReRRT::setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q)
+{
+    predefined_samples_ = Q;
+}
+
+void ompl::geometric::ReRRT::getSampleSetConnectivity(Eigen::SparseMatrix<int>& C)
+{
+    C.resize(1, predefined_samples_.rows());
+    C.setZero();
+    C.setFromTriplets(connectivity_tup_.begin(), connectivity_tup_.end());
+}
+
 void ompl::geometric::ReRRT::freeMemory()
 {
     if (nn_)
@@ -150,8 +162,14 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     size_t nsample_created = 0;
     size_t nsample_injected = 0;
     bool sat = false;
+    // Predefined sample set support
+    ssize_t iteration = 0;
+    connectivity_tup_.clear();
+    if (predefined_samples_.rows() > 0 && knearest_ > 1) {
+	throw std::runtime_error("ReRRT: setSampleSet is incompatitable with setKNearest");
+    }
 
-    while (ptc == false && !sat)
+    while (ptc() == false && !sat)
     {
 	bool injecting = (nsample_created >= sample_injection_ && nsample_injected < samples_to_inject_.size());
 	if (injecting) {
@@ -161,6 +179,13 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	    print_state(std::cout, rstate, si_) << std::endl;
 #endif
 	    nsample_injected++;
+	} else if (predefined_samples_.rows() > 0) {
+	    // Early termination
+	    if (iteration >= predefined_samples_.rows())
+		break;
+	    // Override sampler
+	    si_->getStateSpace()->copyFromEigen3(rstate, predefined_samples_.row(iteration));
+	    iteration++;
 	} else {
 	    /* sample random state (with goal biasing) */
 	    if (goal_s && rng_.uniform01() < goalBias_ && goal_s->canSample())
@@ -241,8 +266,11 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		}
 		nsample_created++;
 	    }
-	    if (directly_connected)
+	    if (directly_connected) {
+		if (predefined_samples_.rows() > 0) 
+		    connectivity_tup_.emplace_back(0, iteration, 1);
 		break;
+	    }
 	}
     }
 
