@@ -169,6 +169,13 @@ void ompl::base::Planner::getSampleSetConnectivity(Eigen::SparseMatrix<int>& )
     throw std::runtime_error("getSampleSetConnectivity not implemented in Planner " + getName());
 }
 
+void ompl::base::Planner::getCompactGraph(Eigen::Matrix<int64_t, -1, 1>& nouveau_vertex_id,
+                                          Eigen::MatrixXd& nouveau_vertices,
+                                          Eigen::Matrix<int64_t, -1, 2>& edges) const
+{
+    throw std::runtime_error("getCompactGraph not implemented in Planner " + getName());
+}
+
 void ompl::base::PlannerInputStates::clear()
 {
     if (tempState_ != nullptr)

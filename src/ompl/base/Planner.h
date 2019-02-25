@@ -373,6 +373,22 @@ namespace ompl
              */
             virtual void setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q);
             virtual void getSampleSetConnectivity(Eigen::SparseMatrix<int>& ); // sparse connectivity matrix, size (1, Q.rows())
+	    /** \brief return the compact data strcture after using a predefined sample set (PDS)
+ 	     * We do not need to supply every milestones in the planner's graph, because some of them are the same with the vertices in the predefined sample set.
+	     * This function returns the following items to represent the
+	     * graph in a more compact manner
+	     * 1. list of newly created vertex ids
+	     * 2. The correponding vertices from 1.
+	     * 3. a list edges indice with the following numbering scheme:
+	     *    a) all sampled milestones are numbered from 0 to +inf
+	     *    b) all initial state are number from -1 to -inf
+	     *    c) goal states are not numbered/recorded for current
+	     *       protocol, since the PDS base RRT algorithm does not have
+	     *       a special goal state in the tree (at least for now).
+	     */
+            virtual void getCompactGraph(Eigen::Matrix<int64_t, -1, 1>& nouveau_vertex_id,
+                                         Eigen::MatrixXd& nouveau_vertices,
+                                         Eigen::Matrix<int64_t, -1, 2>& edges) const;
 
         protected:
             /** \brief This function declares a parameter for this planner instance, and specifies the setter and getter

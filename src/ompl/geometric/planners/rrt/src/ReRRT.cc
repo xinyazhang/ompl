@@ -94,6 +94,73 @@ void ompl::geometric::ReRRT::getSampleSetConnectivity(Eigen::SparseMatrix<int>& 
     C.setFromTriplets(connectivity_tup_.begin(), connectivity_tup_.end());
 }
 
+void ompl::geometric::ReRRT::getCompactGraph(Eigen::Matrix<int64_t, -1, 1>& nouveau_vertex_id,
+	                                     Eigen::MatrixXd& nouveau_vertices,
+	                                     Eigen::Matrix<int64_t, -1, 2>& edges) const
+{
+    if (predefined_samples_.rows() <= 0) {
+	OMPL_ERROR("%s: getCompactGraph requires setSampleSet", getName().c_str());
+	return ;
+    }
+    std::vector<Motion*> motions;
+    nn_->list(motions);
+    std::vector<Motion*> nouveau_motions;
+    for (const auto& m : motions) {
+	if (m->motion_type != Motion::MOTION_OF_SAMPLE)
+	    continue;
+	if (!m->is_nouveau)
+	    continue;
+	nouveau_motions.emplace_back(m);
+    }
+    std::sort(nouveau_motions.begin(),
+	      nouveau_motions.end(),
+	      [](const Motion* lhs, const Motion* rhs) {
+	         return lhs->motion_index < rhs->motion_index;
+	      });
+    nouveau_vertex_id.resize(nouveau_motions.size());
+    nouveau_vertices.resize(nouveau_motions.size(), predefined_samples_.cols());
+    size_t rowi = 0;
+    std::vector<double> reals;
+    for (const auto& current : nouveau_motions) {
+	// Vid
+	nouveau_vertex_id(rowi) = current->motion_index;
+	// V
+	si_->getStateSpace()->copyToReals(reals, current->state);
+	nouveau_vertices.row(rowi) = Eigen::Map<Eigen::VectorXd>(reals.data(), reals.size(), 1);
+	rowi++;
+    }
+    // std::cerr << "nouveau motions filled\n";
+    rowi = 0;
+    // Number of edges:
+    // 1. Tree structure, E=V-1
+    // 2. We do not track the root (initial state) so E=V'
+    size_t nedge = 0;
+    for (const auto& current : motions) {
+	Motion* parent = current->parent;
+	if (parent)
+	    nedge++;
+    }
+    edges.setZero(nedge, 2);
+    // std::cerr << "edges resized to " << motions.size() << ", 2" << std::endl;
+    for (const auto& current : motions) {
+	Motion* parent = current->parent;
+	if (!parent)
+	    continue ;
+	int64_t cindex = current->motion_index;
+	if (current->motion_type == Motion::MOTION_OF_START)
+	    cindex = -(cindex + 1);
+	int64_t pindex = parent->motion_index;
+	if (parent->motion_type == Motion::MOTION_OF_START)
+	    pindex = -(pindex + 1);
+	// E
+	if (cindex < -2 || pindex < -2)
+	    throw std::runtime_error("invalid index: cindex "+std::to_string(cindex)+" pindex " +std::to_string(pindex));
+	edges.row(rowi) << cindex, pindex;
+	// std::cerr << "edges(" << rowi << ")" << std::endl;
+	rowi++;
+    }
+}
+
 void ompl::geometric::ReRRT::freeMemory()
 {
     if (nn_)
@@ -133,6 +200,8 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     while (const base::State *st = pis_.nextStart())
     {
         Motion *motion = new Motion(si_);
+	motion->motion_type = Motion::MOTION_OF_START;
+	motion->motion_index = nn_->size();
         si_->copyState(motion->state, st);
 	std::cout << getName() << ": Initialize by adding state ";
 	print_state(std::cout, st, si_) << std::endl;
@@ -149,6 +218,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     if (!sampler_)
         sampler_ = si_->allocStateSampler();
 
+    motion_of_start_size_ = nn_->size();
     OMPL_INFORM("%s: Starting planning with %u states already in datastructure", getName().c_str(), nn_->size());
     OMPL_INFORM("%s: Max Distance %f", getName().c_str(), maxDistance_);
 
@@ -168,6 +238,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     if (predefined_samples_.rows() > 0 && knearest_ > 1) {
 	throw std::runtime_error("ReRRT: setSampleSet is incompatitable with setKNearest");
     }
+    bool enable_predefined_samples = predefined_samples_.rows();
 
     while (ptc() == false && !sat)
     {
@@ -179,7 +250,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	    print_state(std::cout, rstate, si_) << std::endl;
 #endif
 	    nsample_injected++;
-	} else if (predefined_samples_.rows() > 0) {
+	} else if (enable_predefined_samples) {
 	    // Early termination
 	    if (iteration >= predefined_samples_.rows())
 		break;
@@ -242,6 +313,15 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		Motion *motion = new Motion(si_);
 		si_->copyState(motion->state, dstate);
 		motion->parent = nmotion;
+		if (enable_predefined_samples) {
+		    motion->is_nouveau = !directly_connected;
+		    motion->motion_type = Motion::MOTION_OF_SAMPLE;
+		    motion->motion_index = iteration;
+		} else {
+		    motion->is_nouveau = true;
+		    motion->motion_type = Motion::MOTION_OF_SAMPLE;
+		    motion->motion_index = nn_->size() - motion_of_start_size_;
+		}
 #if 0
 		if (injecting) {
 		    std::cout << "Re-RRT: Creating Edge From " << std::endl << "\t";
@@ -249,7 +329,6 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		    print_state(std::cout, dstate, si_) << std::endl;
 		}
 #endif
-
 		nn_->add(motion);
 		double dist = 0.0;
 		sat = goal->isSatisfied(motion->state, &dist);
@@ -267,7 +346,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		nsample_created++;
 	    }
 	    if (directly_connected) {
-		if (predefined_samples_.rows() > 0) 
+		if (enable_predefined_samples)
 		    connectivity_tup_.emplace_back(0, iteration, 1);
 		break;
 	    }

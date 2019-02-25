@@ -126,6 +126,10 @@ namespace ompl
 
 	    virtual void setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q) override;
 	    virtual void getSampleSetConnectivity(Eigen::SparseMatrix<int>& ) override;
+	    virtual void getCompactGraph(Eigen::Matrix<int64_t, -1, 1>& nouveau_vertex_id,
+	                                 Eigen::MatrixXd& nouveau_vertices,
+	                                 Eigen::Matrix<int64_t, -1, 2>& edges) const;
+
 
         protected:
 
@@ -157,6 +161,13 @@ namespace ompl
                 /** \brief The parent motion in the exploration tree */
                 Motion            *parent;
 
+		int64_t motion_index = -65535;
+		bool is_nouveau = true;
+		enum {
+			MOTION_OF_START,
+			MOTION_OF_GOAL,
+			MOTION_OF_SAMPLE,
+		} motion_type;
             };
 
             /** \brief Free the memory allocated by this planner */
@@ -192,6 +203,8 @@ namespace ompl
 
 	    Eigen::MatrixXd predefined_samples_;
 	    std::vector<Eigen::Triplet<int>> connectivity_tup_;
+
+	    size_t motion_of_start_size_;
         };
 
     }
