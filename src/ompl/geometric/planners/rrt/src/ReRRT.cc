@@ -256,7 +256,6 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		break;
 	    // Override sampler
 	    si_->getStateSpace()->copyFromEigen3(rstate, predefined_samples_.row(iteration));
-	    iteration++;
 	} else {
 	    /* sample random state (with goal biasing) */
 	    if (goal_s && rng_.uniform01() < goalBias_ && goal_s->canSample())
@@ -351,6 +350,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		break;
 	    }
 	}
+	iteration++;
     }
 
     bool solved = false;
