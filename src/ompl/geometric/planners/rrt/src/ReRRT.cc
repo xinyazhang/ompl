@@ -238,7 +238,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     if (predefined_samples_.rows() > 0 && knearest_ > 1) {
 	throw std::runtime_error("ReRRT: setSampleSet is incompatitable with setKNearest");
     }
-    bool enable_predefined_samples = predefined_samples_.rows();
+    bool enable_predefined_samples = predefined_samples_.rows() > 0;
 
     while (ptc() == false && !sat)
     {
@@ -316,6 +316,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		    motion->is_nouveau = !directly_connected;
 		    motion->motion_type = Motion::MOTION_OF_SAMPLE;
 		    motion->motion_index = iteration;
+		    // OMPL_INFORM("CT[%ld] := ..., directly connected = %d", iteration, (int)directly_connected);
 		} else {
 		    motion->is_nouveau = true;
 		    motion->motion_type = Motion::MOTION_OF_SAMPLE;
@@ -345,8 +346,10 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		nsample_created++;
 	    }
 	    if (directly_connected) {
-		if (enable_predefined_samples)
+		if (enable_predefined_samples) {
 		    connectivity_tup_.emplace_back(0, iteration, 1);
+		    // OMPL_INFORM("SSC[0,%ld] := 1", iteration);
+		}
 		break;
 	    }
 	}
