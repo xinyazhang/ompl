@@ -372,7 +372,12 @@ namespace ompl
 	     *    than waiting for ptc becomes true
              */
             virtual void setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q);
-            virtual void getSampleSetConnectivity(Eigen::SparseMatrix<int>& ); // sparse connectivity matrix, size (1, Q.rows())
+	    enum {
+		    PDS_FLAG_TERMINATE = 1,
+	    };
+            virtual void setSampleSetFlags(const Eigen::Ref<const Eigen::Matrix<uint32_t, -1, 1>> QF);
+	    // sparse connectivity matrix, size (1, Q.rows())
+            virtual void getSampleSetConnectivity(Eigen::SparseMatrix<int>& );
 	    /** \brief return the compact data strcture after using a predefined sample set (PDS)
  	     * We do not need to supply every milestones in the planner's graph, because some of them are the same with the vertices in the predefined sample set.
 	     * This function returns the following items to represent the

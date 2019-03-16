@@ -164,6 +164,12 @@ void ompl::base::Planner::setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> )
     throw std::runtime_error("setSampleSet not implemented in Planner " + getName());
 }
 
+void ompl::base::Planner::setSampleSetFlags(const Eigen::Ref<const Eigen::Matrix<uint32_t, -1, 1>> QF)
+{
+    throw std::runtime_error("setSampleSetFlags not implemented in Planner " + getName());
+}
+
+
 void ompl::base::Planner::getSampleSetConnectivity(Eigen::SparseMatrix<int>& )
 {
     throw std::runtime_error("getSampleSetConnectivity not implemented in Planner " + getName());
