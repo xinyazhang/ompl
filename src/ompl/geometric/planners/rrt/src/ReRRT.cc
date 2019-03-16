@@ -87,6 +87,11 @@ void ompl::geometric::ReRRT::setSampleSet(const Eigen::Ref<const Eigen::MatrixXd
     predefined_samples_ = Q;
 }
 
+void ompl::geometric::ReRRT::setSampleSetFlags(const Eigen::Ref<const Eigen::Matrix<uint32_t, -1, 1>> QF)
+{
+    pds_flags_ = QF;
+}
+
 void ompl::geometric::ReRRT::getSampleSetConnectivity(Eigen::SparseMatrix<int>& C)
 {
     C.resize(1, predefined_samples_.rows());
@@ -349,6 +354,10 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		if (enable_predefined_samples) {
 		    connectivity_tup_.emplace_back(0, iteration, 1);
 		    // OMPL_INFORM("SSC[0,%ld] := 1", iteration);
+		    if (pds_flags_(iteration) & PDS_FLAG_TERMINATE) {
+			OMPL_INFORM("Early Termination at Iteration %ld: connected to open space", iteration);
+			sat = true;
+		    }
 		}
 		break;
 	    }
