@@ -354,7 +354,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		if (enable_predefined_samples) {
 		    connectivity_tup_.emplace_back(0, iteration, 1);
 		    // OMPL_INFORM("SSC[0,%ld] := 1", iteration);
-		    if (pds_flags_(iteration) & PDS_FLAG_TERMINATE) {
+		    if (pds_flags_.rows() > 0 && (pds_flags_(iteration) & PDS_FLAG_TERMINATE)) {
 			OMPL_INFORM("Early Termination at Iteration %ld: connected to open space", iteration);
 			sat = true;
 		    }
