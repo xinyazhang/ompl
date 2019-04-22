@@ -186,6 +186,8 @@ void ompl::geometric::PathGeometric::print(std::ostream &out) const
         si_->printState(state, out);
     out << std::endl;
 }
+
+
 void ompl::geometric::PathGeometric::printAsMatrix(std::ostream &out) const
 {
     const base::StateSpace *space(si_->getStateSpace().get());
@@ -197,6 +199,20 @@ void ompl::geometric::PathGeometric::printAsMatrix(std::ostream &out) const
         out << std::endl;
     }
     out << std::endl;
+}
+
+void ompl::geometric::PathGeometric::toMatrix(Eigen::MatrixXd& mat) const
+{
+    const base::StateSpace *space(si_->getStateSpace().get());
+    Eigen::VectorXd e3state;
+    space->copyToEigen3(e3state, states_.front());
+    mat.resize(states_.size(), e3state.size());
+    std::vector<double> reals;
+    for (size_t i = 0; i < states_.size(); i++)
+    {
+        space->copyToEigen3(e3state, states_[i]);
+        mat.row(i) = e3state;
+    }
 }
 
 std::pair<bool, bool> ompl::geometric::PathGeometric::checkAndRepair(unsigned int attempts)

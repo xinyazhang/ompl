@@ -138,6 +138,8 @@ namespace ompl
                 ompl::base::StateSpace::copyToReals. */
             virtual void printAsMatrix(std::ostream &out) const;
 
+            virtual void toMatrix(Eigen::MatrixXd& mat) const;
+
             /** @name Path operations
                 @{ */
 
