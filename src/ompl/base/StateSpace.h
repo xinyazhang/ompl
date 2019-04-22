@@ -408,6 +408,9 @@ namespace ompl
             virtual void copyFromReals(State *destination, const std::vector<double> &reals) const;
 
             /** \brief Copy the values from \e e3vector to the state \e destination using getValueAddressAtLocation() */
+            virtual void copyToEigen3(Eigen::VectorXd& e3vector, const State *source) const;
+
+            /** \brief Copy the values from \e e3vector to the state \e destination using getValueAddressAtLocation() */
             virtual void copyFromEigen3(State *destination, const Eigen::Ref<const Eigen::VectorXd> e3vector) const;
 
             /** @} */
