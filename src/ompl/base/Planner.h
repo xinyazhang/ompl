@@ -395,6 +395,12 @@ namespace ompl
                                          Eigen::MatrixXd& nouveau_vertices,
                                          Eigen::Matrix<int64_t, -1, 2>& edges) const;
 
+	    virtual ssize_t peekPlannerDataSize() const;
+	    void setOptionVector(const std::vector<std::string>& ovec);
+	    bool getOptionBool(const std::string& key) const;
+	    bool getOptionStr(const std::string& key, std::string& value) const;
+	    bool getOptionInt(const std::string& key, long& value) const;
+	    bool getOptionReal(const std::string& key, double& value) const;
         protected:
             /** \brief This function declares a parameter for this planner instance, and specifies the setter and getter
              * functions. */
@@ -462,6 +468,11 @@ namespace ompl
 
             /** \brief Flag indicating whether setup() has been called */
             bool setup_;
+
+	    /** \brief traslated option vector: parsed option string organized
+ 	     * into key -> list of string. The '--' prefix in options have
+	     * been removed from key **/
+	    std::map<std::string, std::vector<std::string>> option_dict_;
         };
 
         /** \brief Definition of a function that can allocate a planner */

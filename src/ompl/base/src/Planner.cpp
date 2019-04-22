@@ -182,6 +182,112 @@ void ompl::base::Planner::getCompactGraph(Eigen::Matrix<int64_t, -1, 1>& nouveau
     throw std::runtime_error("getCompactGraph not implemented in Planner " + getName());
 }
 
+ssize_t ompl::base::Planner::peekPlannerDataSize() const
+{
+    throw std::runtime_error("peekPlannerDataSize not implemented in Planner " + getName());
+}
+
+namespace {
+	// Note: we MUST use double dash instead of single dash, otherwise
+ 	// negative real values will be considered as an option key
+	const std::string key_prefix = "--";
+
+	bool is_option_key(const std::string& key)
+	{
+		return key.compare(0, key_prefix.size(), key_prefix) == 0;
+
+	}
+
+	std::string sanitize_option_key(const std::string& key)
+	{
+		if (!is_option_key(key))
+			return key;
+		size_t off = key_prefix.size();
+		while (off < key.size() and key[off] == '-')
+			off += 1;
+		return key.substr(off, key.size() - off);
+	}
+}
+
+/*
+ * Option vector: variable length arguments similary to long options
+ */
+void ompl::base::Planner::setOptionVector(const std::vector<std::string>& ovec)
+{
+	option_dict_.clear();
+	OMPL_INFORM("Is '--retract' option key? %d", is_option_key("--retract"));
+	for (const auto& s : ovec) {
+		OMPL_INFORM("[OptionVector]: %s", s.c_str());
+	}
+	for (size_t i = 0; i < ovec.size(); i++) {
+		// Search for option key
+		while (i < ovec.size() && !is_option_key(ovec[i]))
+			i++;
+		if (i >= ovec.size())
+			break;
+		OMPL_INFORM("Current key location %d", i);
+		std::string current_key = sanitize_option_key(ovec[i]);
+		auto current_key_index = i;
+		i++; // find next key
+		while (i < ovec.size() && !is_option_key(ovec[i]))
+			i++;
+		OMPL_INFORM("Next key location %d", i);
+		std::vector<std::string> current_args;
+		for (auto j = current_key_index + 1; j < i; j++)
+			current_args.emplace_back(ovec[j]);
+		option_dict_[current_key] = current_args;
+	}
+	OMPL_INFORM("[OptionDict]:");
+	for (const auto& kv : option_dict_) {
+		std::stringstream ss;
+		ss << "\t[" << kv.first << "]: ";
+		for (const auto& s: kv.second) {
+			ss << s;
+		}
+		OMPL_INFORM("%s", ss.str().c_str());
+	}
+}
+
+bool ompl::base::Planner::getOptionBool(const std::string& key) const
+{
+	// Can be option_dict_.contains(key) in C++ 20
+	return option_dict_.find(key) != option_dict_.end();
+}
+
+bool ompl::base::Planner::getOptionStr(const std::string& key, std::string& value) const
+{
+	auto iter = option_dict_.find(key);
+	if (iter == option_dict_.end())
+	    return false;
+	if (iter->second.empty())
+	    return false;
+	value = iter->second[0];
+	return true;
+}
+
+bool ompl::base::Planner::getOptionInt(const std::string& key, long& value) const
+{
+	auto iter = option_dict_.find(key);
+	if (iter == option_dict_.end())
+	    return false;
+	if (iter->second.empty())
+	    return false;
+	value = std::stol(iter->second[0]);
+	return true;
+}
+
+bool ompl::base::Planner::getOptionReal(const std::string& key, double& value) const
+{
+	auto iter = option_dict_.find(key);
+	if (iter == option_dict_.end())
+	    return false;
+	if (iter->second.empty())
+	    return false;
+	value = std::stod(iter->second[0]);
+	return true;
+}
+
+
 void ompl::base::PlannerInputStates::clear()
 {
     if (tempState_ != nullptr)
