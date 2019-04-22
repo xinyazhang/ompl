@@ -244,6 +244,9 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	throw std::runtime_error("ReRRT: setSampleSet is incompatitable with setKNearest");
     }
     bool enable_predefined_samples = predefined_samples_.rows() > 0;
+    double retraction_ratio = 1.0;
+    bool use_retracted_sample = getOptionReal("retract", retraction_ratio);
+    OMPL_INFORM("%s: Retraction enabled %s ration ratio %f", getName().c_str(), use_retracted_sample ? "True" : "False", retraction_ratio);
 
     while (ptc() == false && !sat)
     {
@@ -295,7 +298,11 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	    bool directly_connected = si_->checkMotion(nmotion->state, dstate, lastValid);
 	    if (!directly_connected) {
 		if (lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
-		    si_->copyState(dstate, lastValid.first);
+		    if (use_retracted_sample) {
+			si_->getStateSpace()->interpolate(nmotion->state, lastValid.first, retraction_ratio, dstate);
+		    } else {
+			si_->copyState(dstate, lastValid.first);
+		    }
 		} else
 		    to_create_motion = false;
 		if (injecting) {
