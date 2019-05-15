@@ -247,6 +247,9 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     double retraction_ratio = 1.0;
     bool use_retracted_sample = getOptionReal("retract", retraction_ratio);
     OMPL_INFORM("%s: Retraction enabled %s ration ratio %f", getName().c_str(), use_retracted_sample ? "True" : "False", retraction_ratio);
+    long bloom_limit = -1;
+    bool has_bloom_limit = getOptionInt("bloom_limit", bloom_limit);
+    OMPL_INFORM("%s: bloom_limit enabled %s value %ld", getName().c_str(), has_bloom_limit ? "True" : "False", bloom_limit);
 
     while (ptc() == false && !sat)
     {
@@ -370,6 +373,10 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	    }
 	}
 	iteration++;
+	if (has_bloom_limit && nn_->size() > bloom_limit) {
+	    OMPL_INFORM("%s: bloom_limit reached, leaving", getName().c_str());
+	    sat = true;
+	}
     }
 
     bool solved = false;
