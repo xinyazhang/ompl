@@ -244,6 +244,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	throw std::runtime_error("ReRRT: setSampleSet is incompatitable with setKNearest");
     }
     bool enable_predefined_samples = predefined_samples_.rows() > 0;
+    OMPL_INFORM("%s: PDS %s", getName().c_str(), enable_predefined_samples ? "Enabled" : "Disabled");
     double retraction_ratio = 1.0;
     bool use_retracted_sample = getOptionReal("retract", retraction_ratio);
     OMPL_INFORM("%s: Retraction enabled %s ration ratio %f", getName().c_str(), use_retracted_sample ? "True" : "False", retraction_ratio);
@@ -254,19 +255,24 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     while (ptc() == false && !sat)
     {
 	bool injecting = (nsample_created >= sample_injection_ && nsample_injected < samples_to_inject_.size());
-	if (injecting) {
+	if (enable_predefined_samples) {
+	    // Early termination
+	    if (iteration >= predefined_samples_.rows())
+		break;
+	    // Override sampler
+	    si_->getStateSpace()->copyFromEigen3(rstate, predefined_samples_.row(iteration));
+#if 0
+	    std::cout << "PDS [" << iteration << "]\t";
+	    print_state(std::cout, rstate, si_);
+	    std::cout << std::endl;
+#endif
+	} else if (injecting) {
 	    si_->getStateSpace()->copyFromReals(rstate, samples_to_inject_[nsample_injected]);
 #if 0
 	    std::cout << getName() << ": Injecting state ";
 	    print_state(std::cout, rstate, si_) << std::endl;
 #endif
 	    nsample_injected++;
-	} else if (enable_predefined_samples) {
-	    // Early termination
-	    if (iteration >= predefined_samples_.rows())
-		break;
-	    // Override sampler
-	    si_->getStateSpace()->copyFromEigen3(rstate, predefined_samples_.row(iteration));
 	} else {
 	    /* sample random state (with goal biasing) */
 	    if (goal_s && rng_.uniform01() < goalBias_ && goal_s->canSample())
@@ -289,11 +295,12 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	    base::State *dstate = rstate;
 
 	    /* find state to add */
-	    double d = si_->distance(nmotion->state, rstate);
-	    if (d > maxDistance_ && !injecting)
-	    {
-		si_->getStateSpace()->interpolate(nmotion->state, rstate, maxDistance_ / d, xstate);
-		dstate = xstate;
+	    if (!enable_predefined_samples && !injecting) {
+		double d = si_->distance(nmotion->state, rstate);
+		if (d > maxDistance_) {
+		    si_->getStateSpace()->interpolate(nmotion->state, rstate, maxDistance_ / d, xstate);
+		    dstate = xstate;
+		}
 	    }
 
 	    bool to_create_motion = true;
@@ -338,6 +345,14 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		    motion->motion_index = nn_->size() - motion_of_start_size_;
 		}
 #if 0
+		std::cout.precision(17);
+		std::cout << "[" << iteration << "]" << (directly_connected ? "Direct" : "Indirect") << " RDT: Edge Creation " << std::endl
+		          << "\t<" << nmotion->motion_index << "> ";
+		print_state(std::cout, nmotion->state, si_);
+		std::cout << "\n\t<" << motion->motion_index << "> ";
+		print_state(std::cout, dstate, si_);
+		std::cout << std::endl;
+
 		if (injecting) {
 		    std::cout << "Re-RRT: Creating Edge From " << std::endl << "\t";
 		    print_state(std::cout, nmotion->state, si_) << std::endl << "\tTo\n\t";
