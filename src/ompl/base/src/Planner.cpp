@@ -219,7 +219,8 @@ void ompl::base::Planner::setOptionVector(const std::vector<std::string>& ovec)
 	for (const auto& s : ovec) {
 		OMPL_INFORM("[OptionVector]: %s", s.c_str());
 	}
-	for (size_t i = 0; i < ovec.size(); i++) {
+	size_t i = 0;
+	while (true) {
 		// Search for option key
 		while (i < ovec.size() && !is_option_key(ovec[i]))
 			i++;
@@ -233,7 +234,7 @@ void ompl::base::Planner::setOptionVector(const std::vector<std::string>& ovec)
 			i++;
 		OMPL_INFORM("Next key location %d", i);
 		std::vector<std::string> current_args;
-		for (auto j = current_key_index + 1; j < i; j++)
+		for (auto j = current_key_index + 1; j < i && j < ovec.size(); j++)
 			current_args.emplace_back(ovec[j]);
 		option_dict_[current_key] = current_args;
 	}
