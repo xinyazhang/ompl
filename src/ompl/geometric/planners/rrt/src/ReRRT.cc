@@ -107,8 +107,21 @@ void ompl::geometric::ReRRT::getCompactGraph(Eigen::Matrix<int64_t, -1, 1>& nouv
 	OMPL_ERROR("%s: getCompactGraph requires setSampleSet", getName().c_str());
 	return ;
     }
-    std::vector<Motion*> motions;
-    nn_->list(motions);
+    std::unordered_set<Motion*> motions; // to store motions we are going to keep
+    {
+	std::vector<Motion*> all_motions;
+	nn_->list(all_motions);
+	for (auto m : all_motions) {
+	    // Skip motion that's not in PDS
+	    if (m->is_nouveau)
+		continue;
+	    // Add motions from PDS to root into motions
+	    do {
+		motions.emplace(m);
+		m = m->parent;
+	    } while (m);
+	}
+    }
     std::vector<Motion*> nouveau_motions;
     for (const auto& m : motions) {
 	if (m->motion_type != Motion::MOTION_OF_SAMPLE)
