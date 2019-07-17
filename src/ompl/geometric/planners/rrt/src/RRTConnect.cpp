@@ -268,6 +268,13 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
     bool startTree = true;
     bool solved = false;
     ssize_t iteration = 0;
+    long ec_limit = -1;
+    bool has_ec_limit = getOptionInt("ec_limit", ec_limit);
+    OMPL_INFORM("%s: edge connection limit enabled %s value %ld",
+		getName().c_str(),
+		has_ec_limit ? "True" : "False",
+		ec_limit);
+    ssize_t edge_connection = 0;
 
     while (!ptc)
     {
@@ -310,6 +317,7 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
         iteration++;
 
         GrowState gs = growTree(tree, tgi, rmotion);
+        edge_connection += 1;
 
         if (gs != TRAPPED)
         {
@@ -324,8 +332,10 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
 
             GrowState gsc = ADVANCED;
             tgi.start = startTree;
-            while (gsc == ADVANCED)
+            while (gsc == ADVANCED) {
                 gsc = growTree(otherTree, tgi, rmotion);
+                edge_connection += 1;
+	    }
 
             /* update distance between trees */
             const double newDist = tree->getDistanceFunction()(addedMotion, otherTree->nearest(addedMotion));
@@ -396,6 +406,13 @@ ompl::base::PlannerStatus ompl::geometric::RRTConnect::solve(const base::Planner
                 }
             }
         }
+	if (has_ec_limit && edge_connection > ec_limit) {
+	    OMPL_INFORM("%s: ec_limit %ld reached after %ld connections, leaving",
+			getName().c_str(),
+			ec_limit,
+			edge_connection);
+	    break;
+	}
     }
 
     si_->freeState(tgi.xstate);
