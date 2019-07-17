@@ -264,6 +264,14 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     long bloom_limit = -1;
     bool has_bloom_limit = getOptionInt("bloom_limit", bloom_limit);
     OMPL_INFORM("%s: bloom_limit enabled %s value %ld", getName().c_str(), has_bloom_limit ? "True" : "False", bloom_limit);
+    long ec_limit = -1;
+    bool has_ec_limit = getOptionInt("ec_limit", ec_limit);
+    OMPL_INFORM("%s: edge connection limit enabled %s value %ld",
+		getName().c_str(),
+		has_ec_limit ? "True" : "False",
+		ec_limit);
+    long pca_after = -1;
+    ssize_t edge_connection = 0;
 
     while (ptc() == false && !sat)
     {
@@ -319,6 +327,7 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	    bool to_create_motion = true;
 	    std::pair<base::State*, double> lastValid(restate, 0.0);
 	    bool directly_connected = si_->checkMotion(nmotion->state, dstate, lastValid);
+	    edge_connection += 1;
 	    if (!directly_connected) {
 		if (lastValid.first != nullptr && lastValid.second < 1.0 - 1e-4 && lastValid.second > 1e-4) {
 		    if (use_retracted_sample) {
@@ -403,6 +412,13 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 	iteration++;
 	if (has_bloom_limit && nn_->size() > bloom_limit) {
 	    OMPL_INFORM("%s: bloom_limit reached, leaving", getName().c_str());
+	    sat = true;
+	}
+	if (has_ec_limit && edge_connection > ec_limit) {
+	    OMPL_INFORM("%s: ec_limit %ld reached after %ld connections, leaving",
+			getName().c_str(),
+			ec_limit,
+			edge_connection);
 	    sat = true;
 	}
     }
