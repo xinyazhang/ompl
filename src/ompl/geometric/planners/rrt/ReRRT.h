@@ -131,9 +131,6 @@ namespace ompl
 	                                 Eigen::MatrixXd& nouveau_vertices,
 	                                 Eigen::Matrix<int64_t, -1, 2>& edges) const;
 
-        protected:
-
-
             /** \brief Representation of a motion
 
                 This only contains pointers to parent motions as we
@@ -162,6 +159,7 @@ namespace ompl
                 Motion            *parent;
 
 		int64_t motion_index = -65535;
+		int64_t forest_index = 0;
 		bool is_nouveau = true;
 		enum {
 			MOTION_OF_START,
@@ -169,6 +167,18 @@ namespace ompl
 			MOTION_OF_SAMPLE,
 		} motion_type;
             };
+
+            //
+            // Return a writable pointer to nn_
+            // This may destroy the planner
+            // USE IT WITH CAUTION.
+            //
+            std::shared_ptr< NearestNeighbors<Motion*> > _accessNearestNeighbors()
+            {
+                return nn_;
+            }
+
+        protected:
 
             /** \brief Free the memory allocated by this planner */
             void freeMemory();
