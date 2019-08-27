@@ -178,17 +178,17 @@ namespace ompl
                 return nn_;
             }
 
+            double distanceFunction(const Motion *a, const Motion *b) const
+            {
+                return si_->distance(a->state, b->state);
+            }
+
         protected:
 
             /** \brief Free the memory allocated by this planner */
             void freeMemory();
 
             /** \brief Compute distance between motions (actually distance between contained states) */
-            double distanceFunction(const Motion *a, const Motion *b) const
-            {
-                return si_->distance(a->state, b->state);
-            }
-
             /** \brief State sampler */
             base::StateSamplerPtr                          sampler_;
 
