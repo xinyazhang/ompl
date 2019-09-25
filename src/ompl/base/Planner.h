@@ -372,8 +372,13 @@ namespace ompl
 	     *    than waiting for ptc becomes true
              */
             virtual void setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q);
+            virtual void setSampleSetEdges(const Eigen::Ref<const Eigen::MatrixXi> QB,
+                                           const Eigen::Ref<const Eigen::MatrixXi> QE,
+                                           const Eigen::Ref<const Eigen::MatrixXi> QEB
+					   );
 	    enum {
 		    PDS_FLAG_TERMINATE = 1,
+		    _PDS_FLAG_ALREADY_IN_TREE = (1 << 16), // Internal use
 	    };
             virtual void setSampleSetFlags(const Eigen::Ref<const Eigen::Matrix<uint32_t, -1, 1>> QF);
 	    // sparse connectivity matrix, size (1, Q.rows())

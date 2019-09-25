@@ -125,6 +125,9 @@ namespace ompl
 	    void setKNearest(int K) { knearest_ = K; }
 
 	    virtual void setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q) override;
+	    virtual void setSampleSetEdges(const Eigen::Ref<const Eigen::MatrixXi> QB,
+			                   const Eigen::Ref<const Eigen::MatrixXi> QE,
+			                   const Eigen::Ref<const Eigen::MatrixXi> QEB) override;
 	    virtual void setSampleSetFlags(const Eigen::Ref<const Eigen::Matrix<uint32_t, -1, 1>> QF) override;
 	    virtual void getSampleSetConnectivity(Eigen::SparseMatrix<int>& ) override;
 	    virtual void getCompactGraph(Eigen::Matrix<int64_t, -1, 1>& nouveau_vertex_id,
@@ -212,10 +215,16 @@ namespace ompl
 	    int knearest_;
 
 	    Eigen::MatrixXd predefined_samples_;
+	    Eigen::MatrixXi predefined_sample_tree_bases_;
+	    Eigen::MatrixXi predefined_sample_edges_;
+	    Eigen::MatrixXi predefined_sample_edge_bases_;
 	    std::vector<Eigen::Triplet<int>> connectivity_tup_;
 
 	    size_t motion_of_start_size_;
 	    Eigen::Matrix<uint32_t, -1, 1> pds_flags_;
+
+	    // dc_pds_index: Directly Connected PDS index
+	    void addWholePdsTree(ssize_t dc_pds_index, Motion* anchor_pds);
         };
 
     }

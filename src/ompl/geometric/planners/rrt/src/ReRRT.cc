@@ -41,6 +41,7 @@
 #include "ompl/tools/config/SelfConfig.h"
 #include <limits>
 #include <ostream>
+#include <unordered_map>
 
 ompl::geometric::ReRRT::ReRRT(const base::SpaceInformationPtr &si) : base::Planner(si, "Re-RRT")
 {
@@ -85,6 +86,15 @@ void ompl::geometric::ReRRT::setup()
 void ompl::geometric::ReRRT::setSampleSet(const Eigen::Ref<const Eigen::MatrixXd> Q)
 {
     predefined_samples_ = Q;
+}
+
+void ompl::geometric::ReRRT::setSampleSetEdges(const Eigen::Ref<const Eigen::MatrixXi> QB,
+                                               const Eigen::Ref<const Eigen::MatrixXi> QE,
+                                               const Eigen::Ref<const Eigen::MatrixXi> QEB)
+{
+    predefined_sample_tree_bases_ = QB;
+    predefined_sample_edges_ = QE;
+    predefined_sample_edge_bases_ = QEB;
 }
 
 void ompl::geometric::ReRRT::setSampleSetFlags(const Eigen::Ref<const Eigen::Matrix<uint32_t, -1, 1>> QF)
@@ -253,11 +263,14 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     // Predefined sample set support
     ssize_t iteration = 0;
     connectivity_tup_.clear();
-    if (predefined_samples_.rows() > 0 && knearest_ > 1) {
+    ssize_t pds_size = predefined_samples_.rows();
+    if (pds_size > 0 && knearest_ > 1) {
 	throw std::runtime_error("ReRRT: setSampleSet is incompatitable with setKNearest");
     }
-    bool enable_predefined_samples = predefined_samples_.rows() > 0;
+    bool enable_predefined_samples = pds_size > 0;
+    bool enable_pds_edges = enable_predefined_samples && predefined_sample_edges_.rows() > 0;
     OMPL_INFORM("%s: PDS %s", getName().c_str(), enable_predefined_samples ? "Enabled" : "Disabled");
+    OMPL_INFORM("%s: PDS Edge %s", getName().c_str(), enable_pds_edges ? "Enabled" : "Disabled");
     double retraction_ratio = 1.0;
     bool use_retracted_sample = getOptionReal("retract", retraction_ratio);
     OMPL_INFORM("%s: Retraction enabled %s ration ratio %f", getName().c_str(), use_retracted_sample ? "True" : "False", retraction_ratio);
@@ -277,6 +290,15 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
     {
 	bool injecting = (nsample_created >= sample_injection_ && nsample_injected < samples_to_inject_.size());
 	if (enable_predefined_samples) {
+	    // skip already added PDS
+	    while (enable_pds_edges &&
+		   iteration < pds_size &&
+		   (pds_flags_(iteration) & _PDS_FLAG_ALREADY_IN_TREE)) {
+                // OMPL_INFORM("\t%s: Skip PDS %ld since it's already in tree",
+                //            getName().c_str(),
+                //            iteration);
+		iteration++;
+            }
 	    // Early termination
 	    if (iteration >= predefined_samples_.rows())
 		break;
@@ -396,6 +418,8 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		    approxsol = motion;
 		}
 		nsample_created++;
+		if (directly_connected && enable_pds_edges)
+		    addWholePdsTree(iteration, motion);
 	    }
 	    if (directly_connected) {
 		if (enable_predefined_samples) {
@@ -458,7 +482,8 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
         si_->freeState(rmotion->state);
     delete rmotion;
 
-    OMPL_INFORM("%s: Created %u states", getName().c_str(), nn_->size());
+    OMPL_INFORM("%s: Created %u states. Total edge connections %lu", getName().c_str(), nn_->size(),
+                edge_connection);
 
     return base::PlannerStatus(solved, approximate);
 }
@@ -490,4 +515,57 @@ void ompl::geometric::ReRRT::getPlannerData(base::PlannerData &data) const
     }
 }
 
-// vim: sw=4
+void ompl::geometric::ReRRT::addWholePdsTree(ssize_t dc_pds_index,
+                                             ompl::geometric::ReRRT::Motion* anchor_pds)
+{
+    int current_pds_tree_index = 0;
+    const auto& Q = predefined_samples_;
+    const auto& QB = predefined_sample_tree_bases_;
+    const auto& QE = predefined_sample_edges_;
+    const auto& QEB = predefined_sample_edge_bases_;
+    int pds_tree_number = QB.rows();
+    while (current_pds_tree_index < pds_tree_number) {
+        int min_range, max_range;
+        min_range = QB(current_pds_tree_index);
+        if (current_pds_tree_index + 1 < QB.rows())
+            max_range = QB(current_pds_tree_index + 1);
+        else
+            max_range = -1;
+        if (min_range <= dc_pds_index && (max_range < 0 || dc_pds_index < max_range))
+            break;
+        current_pds_tree_index += 1;
+    }
+    // OMPL_INFORM("%s: add Whole PDS tree from %ld, tree id %d", getName().c_str(),
+    //            dc_pds_index, current_pds_tree_index);
+    int vbase = QB(current_pds_tree_index);
+    int ebase = QEB(current_pds_tree_index);
+    int erange_min = ebase;
+    int erange_max = current_pds_tree_index + 1 < pds_tree_number ?
+                     QEB(current_pds_tree_index + 1) :
+                     QE.rows();
+    std::unordered_map<int, std::vector<int>> tree_edges(std::min(5, erange_max - erange_min / 4));
+    for (int ei = erange_min; ei < erange_max; ei++) {
+        tree_edges[QE(ei, 0)].emplace_back(QE(ei, 1));
+        tree_edges[QE(ei, 1)].emplace_back(QE(ei, 0));
+    }
+    std::function<void(ssize_t, Motion*)> dfs;
+    dfs = [&](ssize_t pds_index, Motion* anchor) {
+        for (const auto& ni : tree_edges[pds_index]) {
+            if (pds_flags_[ni] & _PDS_FLAG_ALREADY_IN_TREE)
+                continue;
+            Motion *motion = new Motion(si_);
+	    si_->getStateSpace()->copyFromEigen3(motion->state, Q.row(ni));
+            motion->parent = anchor;
+            motion->is_nouveau = false;
+            motion->motion_type = Motion::MOTION_OF_SAMPLE;
+            motion->motion_index = ni;
+            nn_->add(motion);
+            pds_flags_[ni] |= _PDS_FLAG_ALREADY_IN_TREE;
+            // OMPL_INFORM("\t%s: add Whole PDS ID %d", getName().c_str(), ni);
+            dfs(ni, motion);
+        }
+    };
+    dfs(dc_pds_index, anchor_pds);
+}
+
+// vim: sw=4 expandtab
