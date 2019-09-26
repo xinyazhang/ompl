@@ -418,19 +418,20 @@ ompl::base::PlannerStatus ompl::geometric::ReRRT::solve(const base::PlannerTermi
 		    approxsol = motion;
 		}
 		nsample_created++;
-		if (directly_connected && enable_pds_edges)
-		    addWholePdsTree(iteration, motion);
-	    }
-	    if (directly_connected) {
-		if (enable_predefined_samples) {
-		    connectivity_tup_.emplace_back(0, iteration, 1);
-		    // OMPL_INFORM("SSC[0,%ld] := 1", iteration);
-		    if (pds_flags_.rows() > 0 && (pds_flags_(iteration) & PDS_FLAG_TERMINATE)) {
-			OMPL_INFORM("Early Termination at Iteration %ld: connected to open space", iteration);
-			sat = true;
-		    }
-		}
-		break;
+		if (directly_connected) {
+                    if (enable_pds_edges)
+                        addWholePdsTree(iteration, motion);
+                    if (enable_predefined_samples) {
+                        connectivity_tup_.emplace_back(0, iteration, 1);
+                        // OMPL_INFORM("SSC[0,%ld] := 1", iteration);
+                        if (pds_flags_.rows() > 0 && (pds_flags_(iteration) & PDS_FLAG_TERMINATE)) {
+                            OMPL_INFORM("Early Termination at Iteration %ld: connected to open space", iteration);
+                            solution = motion;
+                            sat = true;
+                        }
+                    }
+                    break;
+                }
 	    }
 	}
 	iteration++;
