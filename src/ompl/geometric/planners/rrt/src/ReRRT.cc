@@ -562,6 +562,7 @@ void ompl::geometric::ReRRT::addWholePdsTree(ssize_t dc_pds_index,
             motion->motion_index = ni;
             nn_->add(motion);
             pds_flags_[ni] |= _PDS_FLAG_ALREADY_IN_TREE;
+            connectivity_tup_.emplace_back(0, ni, 1);
             // OMPL_INFORM("\t%s: add Whole PDS ID %d", getName().c_str(), ni);
             dfs(ni, motion);
         }
