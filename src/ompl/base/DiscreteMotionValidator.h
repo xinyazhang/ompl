@@ -67,10 +67,19 @@ namespace ompl
 
             bool checkMotion(const State *s1, const State *s2, std::pair<State *, double> &lastValid) const override;
 
+            unsigned long getCheckedDiscreteStateCount() const override 
+            {
+                    return checked_discrete_state_;
+            }
+            void resetCheckedDiscreteStateCounter() override { checked_discrete_state_ = 0; }
         private:
             StateSpace *stateSpace_;
 
             void defaultSettings();
+
+            mutable unsigned long checked_discrete_state_ = 0;
+
+            bool isValid(const State* s1) const;
         };
     }
 }

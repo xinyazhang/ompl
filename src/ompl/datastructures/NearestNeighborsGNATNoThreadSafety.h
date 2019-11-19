@@ -195,7 +195,8 @@ namespace ompl
             return true;
         }
 
-        _T nearest(const _T &data) const override
+    protected:
+        _T nearestImpl(const _T &data) const override
         {
             if (size_)
             {
@@ -211,7 +212,7 @@ namespace ompl
         }
 
         /// Return the k nearest neighbors in sorted order
-        void nearestK(const _T &data, std::size_t k, std::vector<_T> &nbh) const override
+        void nearestKImpl(const _T &data, std::size_t k, std::vector<_T> &nbh) const override
         {
             nbh.clear();
             if (k == 0)
@@ -224,7 +225,7 @@ namespace ompl
         }
 
         /// Return the nearest neighbors within distance \c radius in sorted order
-        void nearestR(const _T &data, double radius, std::vector<_T> &nbh) const override
+        void nearestRImpl(const _T &data, double radius, std::vector<_T> &nbh) const override
         {
             nbh.clear();
             if (size_)
@@ -236,6 +237,7 @@ namespace ompl
             assert(nodeQueue_.empty());
         }
 
+    public:
         std::size_t size() const override
         {
             return size_;

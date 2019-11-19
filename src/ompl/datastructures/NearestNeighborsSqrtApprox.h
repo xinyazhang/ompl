@@ -88,7 +88,8 @@ namespace ompl
             return result;
         }
 
-        _T nearest(const _T &data) const override
+    protected:
+        _T nearestImpl(const _T &data) const override
         {
             const std::size_t n = NearestNeighborsLinear<_T>::data_.size();
             std::size_t pos = n;

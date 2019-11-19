@@ -39,7 +39,9 @@
 
 #include "ompl/base/State.h"
 #include "ompl/util/ClassForward.h"
+#include "ompl/util/Time.h"
 #include <utility>
+#include <atomic>
 
 namespace ompl
 {
@@ -67,11 +69,13 @@ namespace ompl
             /** \brief Constructor */
             MotionValidator(SpaceInformation *si) : si_(si), valid_(0), invalid_(0)
             {
+                motion_check_time_.store(0);
             }
 
             /** \brief Constructor */
             MotionValidator(const SpaceInformationPtr &si) : si_(si.get()), valid_(0), invalid_(0)
             {
+                motion_check_time_.store(0);
             }
 
             virtual ~MotionValidator() = default;
@@ -99,19 +103,19 @@ namespace ompl
             virtual bool checkMotion(const State *s1, const State *s2, std::pair<State *, double> &lastValid) const = 0;
 
             /** \brief Get the number of segments that tested as valid */
-            unsigned int getValidMotionCount() const
+            unsigned long getValidMotionCount() const
             {
                 return valid_;
             }
 
             /** \brief Get the number of segments that tested as invalid */
-            unsigned int getInvalidMotionCount() const
+            unsigned long getInvalidMotionCount() const
             {
                 return invalid_;
             }
 
             /** \brief Get the total number of segments tested, regardless of result */
-            unsigned int getCheckedMotionCount() const
+            unsigned long getCheckedMotionCount() const
             {
                 return valid_ + invalid_;
             }
@@ -126,17 +130,31 @@ namespace ompl
             void resetMotionCounter()
             {
                 valid_ = invalid_ = 0;
+                motion_check_time_.store(0);
             }
 
+            uint64_t getMotionCheckTime() const
+            {
+                return motion_check_time_;
+            }
+
+            virtual unsigned long getCheckedDiscreteStateCount() const
+            {
+                return 0;
+            }
+            virtual void resetCheckedDiscreteStateCounter() { }
         protected:
             /** \brief The instance of space information this state validity checker operates on */
             SpaceInformation *si_;
 
             /** \brief Number of valid segments */
-            mutable unsigned int valid_;
+            mutable unsigned long valid_;
 
             /** \brief Number of invalid segments */
-            mutable unsigned int invalid_;
+            mutable unsigned long invalid_;
+
+            /** \brief time spent on motion checking */
+            mutable ompl::time::AtomicTimeCounter motion_check_time_;
         };
     }
 }

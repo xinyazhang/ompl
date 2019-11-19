@@ -174,7 +174,9 @@ namespace ompl
             }
             return false;
         }
-        _T nearest(const _T &data) const override
+
+    protected:
+        _T nearestImpl(const _T &data) const override
         {
             if (size())
             {
@@ -189,7 +191,7 @@ namespace ompl
         }
         /// \brief Return the k nearest neighbors in sorted order if
         /// searchParams_.sorted==true (the default)
-        void nearestK(const _T &data, std::size_t k, std::vector<_T> &nbh) const override
+        void nearestKImpl(const _T &data, std::size_t k, std::vector<_T> &nbh) const override
         {
             auto &elt = const_cast<_T &>(data);
             const flann::Matrix<_T> query(&elt, 1, dimension_);
@@ -202,7 +204,7 @@ namespace ompl
         }
         /// \brief Return the nearest neighbors within distance \c radius in sorted
         /// order if searchParams_.sorted==true (the default)
-        void nearestR(const _T &data, double radius, std::vector<_T> &nbh) const override
+        void nearestRImpl(const _T &data, double radius, std::vector<_T> &nbh) const override
         {
             auto &elt = const_cast<_T &>(data);
             flann::Matrix<_T> query(&elt, 1, dimension_);
@@ -214,6 +216,7 @@ namespace ompl
                 nbh[i] = *index_->getPoint(indices[0][i]);
         }
 
+    public:
         std::size_t size() const override
         {
             return index_ ? index_->size() : 0;

@@ -39,6 +39,7 @@
 
 #include <vector>
 #include <functional>
+#include "ompl/util/Time.h"
 
 namespace ompl
 {
@@ -46,6 +47,7 @@ namespace ompl
     template <typename _T>
     class NearestNeighbors
     {
+        using ATA = ::ompl::time::AtomicTimeAccumulator;
     public:
         /** \brief The definition of a distance function */
         typedef std::function<double(const _T &, const _T &)> DistanceFunction;
@@ -86,22 +88,40 @@ namespace ompl
         /** \brief Remove an element from the datastructure */
         virtual bool remove(const _T &data) = 0;
 
+
+        /*
+         * We add final keyword to prevent shadowing from subclasses.
+         * It is not ideal for performance, but it's least error-prone.
+         */
+
         /** \brief Get the nearest neighbor of a point */
-        virtual _T nearest(const _T &data) const = 0;
+        virtual _T nearest(const _T &data) const final
+        {
+            ATA ata(knn_time_);
+            return nearestImpl(data);
+        }
 
         /** \brief Get the k-nearest neighbors of a point
          *
          * All the nearest neighbor structures currently return the neighbors in
          * sorted order, but this is not required.
          */
-        virtual void nearestK(const _T &data, std::size_t k, std::vector<_T> &nbh) const = 0;
+        virtual void nearestK(const _T &data, std::size_t k, std::vector<_T> &nbh) const final
+        {
+            ATA ata(knn_time_);
+            return nearestKImpl(data, k, nbh);
+        }
 
         /** \brief Get the nearest neighbors of a point, within a specified radius
          *
          * All the nearest neighbor structures currently return the neighbors in
          * sorted order, but this is not required.
          */
-        virtual void nearestR(const _T &data, double radius, std::vector<_T> &nbh) const = 0;
+        virtual void nearestR(const _T &data, double radius, std::vector<_T> &nbh) const final
+        {
+            ATA ata(knn_time_);
+            return nearestRImpl(data, radius, nbh);
+        }
 
         /** \brief Get the number of elements in the datastructure */
         virtual std::size_t size() const = 0;
@@ -109,9 +129,23 @@ namespace ompl
         /** \brief Get all the elements in the datastructure */
         virtual void list(std::vector<_T> &data) const = 0;
 
+        uint64_t getTimeCounter() const { return knn_time_.load(); }
+        void resetTimeCounter() { knn_time_.store(0); }
     protected:
         /** \brief The used distance function */
         DistanceFunction distFun_;
+        mutable ::ompl::time::AtomicTimeCounter knn_time_ {0};
+
+        /** \brief Implement nearest */
+        virtual _T nearestImpl(const _T &data) const = 0;
+
+        /** \brief Implement nearestK
+         */
+        virtual void nearestKImpl(const _T &data, std::size_t k, std::vector<_T> &nbh) const = 0;
+
+        /** \brief Implement nearestR
+         */
+        virtual void nearestRImpl(const _T &data, double radius, std::vector<_T> &nbh) const = 0;
     };
 }
 

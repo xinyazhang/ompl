@@ -38,6 +38,7 @@
 #define OMPL_UTIL_TIME_
 
 #include <chrono>
+#include <atomic>
 #include <ctime>
 #include <iomanip>
 #include <sstream>
@@ -94,6 +95,28 @@ namespace ompl
             ss << std::put_time(std::localtime(&pt), "%F %T");
             return ss.str();
         }
+
+        typedef std::atomic<uint64_t> AtomicTimeCounter ;
+
+        class AtomicTimeAccumulator {
+            using clock = std::chrono::high_resolution_clock;
+        public:
+            AtomicTimeAccumulator(AtomicTimeCounter& timer)
+                :timer_(timer)
+            {
+                timer_start_ = clock::now();
+            }
+
+            ~AtomicTimeAccumulator()
+            {
+                // Must use std::nano otherwise we will notice precision loss
+                std::chrono::duration<uint64_t, std::nano> ms_dur = clock::now() - timer_start_;
+                timer_ += ms_dur.count();
+            }
+        private:
+            AtomicTimeCounter& timer_;
+            decltype(clock::now()) timer_start_;
+        };
     }
 }
 

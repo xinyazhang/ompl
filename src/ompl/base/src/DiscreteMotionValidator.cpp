@@ -36,6 +36,7 @@
 
 #include "ompl/base/DiscreteMotionValidator.h"
 #include "ompl/util/Exception.h"
+#include "ompl/util/Time.h"
 #include <queue>
 
 void ompl::base::DiscreteMotionValidator::defaultSettings()
@@ -48,6 +49,8 @@ void ompl::base::DiscreteMotionValidator::defaultSettings()
 bool ompl::base::DiscreteMotionValidator::checkMotion(const State *s1, const State *s2,
                                                       std::pair<State *, double> &lastValid) const
 {
+    ::ompl::time::AtomicTimeAccumulator _(motion_check_time_);
+
     /* assume motion starts in a valid configuration so s1 is valid */
 
     bool result = true;
@@ -61,7 +64,7 @@ bool ompl::base::DiscreteMotionValidator::checkMotion(const State *s1, const Sta
         for (int j = 1; j < nd; ++j)
         {
             stateSpace_->interpolate(s1, s2, (double)j / (double)nd, test);
-            if (!si_->isValid(test))
+            if (!isValid(test))
             {
                 lastValid.second = (double)(j - 1) / (double)nd;
                 if (lastValid.first != nullptr)
@@ -74,7 +77,7 @@ bool ompl::base::DiscreteMotionValidator::checkMotion(const State *s1, const Sta
     }
 
     if (result)
-        if (!si_->isValid(s2))
+        if (!isValid(s2))
         {
             lastValid.second = (double)(nd - 1) / (double)nd;
             if (lastValid.first != nullptr)
@@ -92,8 +95,10 @@ bool ompl::base::DiscreteMotionValidator::checkMotion(const State *s1, const Sta
 
 bool ompl::base::DiscreteMotionValidator::checkMotion(const State *s1, const State *s2) const
 {
+    ::ompl::time::AtomicTimeAccumulator _(motion_check_time_);
+
     /* assume motion starts in a valid configuration so s1 is valid */
-    if (!si_->isValid(s2))
+    if (!isValid(s2))
     {
         invalid_++;
         return false;
@@ -119,7 +124,7 @@ bool ompl::base::DiscreteMotionValidator::checkMotion(const State *s1, const Sta
             int mid = (x.first + x.second) / 2;
             stateSpace_->interpolate(s1, s2, (double)mid / (double)nd, test);
 
-            if (!si_->isValid(test))
+            if (!isValid(test))
             {
                 result = false;
                 break;
@@ -142,4 +147,10 @@ bool ompl::base::DiscreteMotionValidator::checkMotion(const State *s1, const Sta
         invalid_++;
 
     return result;
+}
+
+bool ompl::base::DiscreteMotionValidator::isValid(const State *s1) const
+{
+    checked_discrete_state_ += 1;
+    return si_->isValid(s1);
 }
