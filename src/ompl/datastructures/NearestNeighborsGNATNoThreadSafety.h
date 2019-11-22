@@ -106,6 +106,11 @@ namespace ompl
             if (tree_)
                 delete tree_;
         }
+
+        virtual const char* getName() const override {
+            return "NearestNeighborsGNATNoThreadSafety";
+        };
+
         /// \brief Set the distance function to use
         void setDistanceFunction(const typename NearestNeighbors<_T>::DistanceFunction &distFun) override
         {

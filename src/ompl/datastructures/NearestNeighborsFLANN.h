@@ -99,6 +99,10 @@ namespace ompl
                 delete index_;
         }
 
+        virtual const char* getName() const override {
+            return "NearestNeighborsFLANN";
+        }
+
         void clear() override
         {
             if (index_)
@@ -339,6 +343,10 @@ namespace ompl
           : NearestNeighborsFLANN<_T, _Dist>(std::shared_ptr<flann::LinearIndexParams>(new flann::LinearIndexParams()))
         {
         }
+
+        virtual const char* getName() const override {
+            return "NearestNeighborsFLANNLinear";
+        }
     };
 
     template <typename _T, typename _Dist = FLANNDistance<_T>>
@@ -349,6 +357,10 @@ namespace ompl
           : NearestNeighborsFLANN<_T, _Dist>(std::shared_ptr<flann::HierarchicalClusteringIndexParams>(
                 new flann::HierarchicalClusteringIndexParams()))
         {
+        }
+
+        virtual const char* getName() const override {
+            return "NearestNeighborsFLANNHierarchicalClustering";
         }
     };
 }

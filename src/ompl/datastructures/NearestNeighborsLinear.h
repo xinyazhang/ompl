@@ -62,6 +62,10 @@ namespace ompl
 
         ~NearestNeighborsLinear() override = default;
 
+        virtual const char* getName() const override {
+            return "NearestNeighborsLinear";
+        }
+
         void clear() override
         {
             data_.clear();

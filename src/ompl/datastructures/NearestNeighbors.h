@@ -56,6 +56,8 @@ namespace ompl
 
         virtual ~NearestNeighbors() = default;
 
+	virtual const char* getName() const = 0;
+
         /** \brief Set the distance function to use */
         virtual void setDistanceFunction(const DistanceFunction &distFun)
         {

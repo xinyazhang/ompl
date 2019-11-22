@@ -61,6 +61,10 @@ namespace ompl
 
         ~NearestNeighborsSqrtApprox() override = default;
 
+        virtual const char* getName() const override {
+            return "NearestNeighborsSqrtApprox";
+        }
+
         void clear() override
         {
             NearestNeighborsLinear<_T>::clear();
