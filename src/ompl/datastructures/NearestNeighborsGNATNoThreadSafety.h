@@ -200,6 +200,14 @@ namespace ompl
             return true;
         }
 
+        std::size_t getRemovedCacheSize() const {
+            return removedCacheSize_;
+        }
+
+        void setRemovedCacheSize(std::size_t new_size) {
+            removedCacheSize_ = new_size;
+        }
+
     protected:
         _T nearestImpl(const _T &data) const override
         {
