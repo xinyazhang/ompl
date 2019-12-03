@@ -120,6 +120,11 @@ namespace ompl
                 rebuildDataStructure();
         }
 
+        void setMaskFunction(std::function<bool(const _T&)> mask_func)
+        {
+            mask_func_ = std::move(mask_func);
+        }
+
         void clear() override
         {
             if (tree_)
@@ -345,7 +350,7 @@ namespace ompl
             Node *node;
 
             tree_->distToPivot_ = NearestNeighbors<_T>::distFun_(data, tree_->pivot_);
-            isPivot = tree_->insertNeighborK(nearQueue_, k, tree_->pivot_, data, tree_->distToPivot_);
+            isPivot = tree_->insertNeighborK(*this, nearQueue_, k, tree_->pivot_, data, tree_->distToPivot_);
             tree_->nearestK(*this, data, k, isPivot);
             while (!nodeQueue_.empty())
             {
@@ -544,8 +549,10 @@ namespace ompl
             }
 
             /// Insert data in nbh if it is a near neighbor. Return true iff data was added to nbh.
-            bool insertNeighborK(NearQueue &nbh, std::size_t k, const _T &data, const _T &key, double dist) const
+            bool insertNeighborK(const GNAT& gnat, NearQueue &nbh, std::size_t k, const _T &data, const _T &key, double dist) const
             {
+                if (gnat.mask_func_ && !gnat.mask_func_(data))
+                    return false;
                 if (nbh.size() < k)
                 {
                     nbh.push(std::make_pair(dist, &data));
@@ -570,7 +577,7 @@ namespace ompl
                 for (const auto &d : data_)
                     if (!gnat.isRemoved(d))
                     {
-                        if (insertNeighborK(nbh, k, d, data, gnat.distFun_(data, d)))
+                        if (insertNeighborK(gnat, nbh, k, d, data, gnat.distFun_(data, d)))
                             isPivot = false;
                     }
                 if (!children_.empty())
@@ -585,7 +592,7 @@ namespace ompl
                         {
                             child = children_[permutation[i]];
                             child->distToPivot_ = gnat.distFun_(data, child->pivot_);
-                            if (insertNeighborK(nbh, k, child->pivot_, data, child->distToPivot_))
+                            if (insertNeighborK(gnat, nbh, k, child->pivot_, data, child->distToPivot_))
                                 isPivot = true;
                             if (nbh.size() == k)
                             {
@@ -801,6 +808,12 @@ namespace ompl
         GreedyKCenters<_T> pivotSelector_;
         /// \brief Cache of removed elements.
         std::unordered_set<const _T *> removed_;
+
+        /// \brief masking function. Sometimes we may want find the nearest
+        /// neighbors within a subset of the tree without deleting any node.
+        /// If mask_func_ is set, node that mask_func_(node) == false will not
+        /// be added to list returned by the nearestK.
+        std::function<bool(const _T&)> mask_func_ = nullptr;
 
         /// \name Internal scratch space
         /// \{
