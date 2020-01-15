@@ -140,6 +140,8 @@ namespace ompl
 
             virtual void toMatrix(Eigen::MatrixXd& mat) const;
 
+            virtual void appendFromMatrix(const Eigen::MatrixXd& mat);
+
             /** @name Path operations
                 @{ */
 

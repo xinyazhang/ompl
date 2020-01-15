@@ -215,6 +215,23 @@ void ompl::geometric::PathGeometric::toMatrix(Eigen::MatrixXd& mat) const
     }
 }
 
+
+void ompl::geometric::PathGeometric::appendFromMatrix(const Eigen::MatrixXd& mat)
+{
+#if 1
+    const base::StateSpace *ss(si_->getStateSpace().get());
+    // Eigen::VectorXd row;
+    for (size_t i = 0; i < mat.rows(); i++) {
+        auto state = si_->allocState();
+        // row = mat.row(i).transpose();
+        // ss->copyFromEigen3(state, row);
+        ss->copyFromEigen3(state, mat.row(i));
+        append(state);
+    }
+#endif
+}
+
+
 std::pair<bool, bool> ompl::geometric::PathGeometric::checkAndRepair(unsigned int attempts)
 {
     if (states_.empty())
